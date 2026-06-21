@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+*.log
+*.gz
+/tmp/genie_run.log
+/tmp/genie_results.json
+.DS_Store
