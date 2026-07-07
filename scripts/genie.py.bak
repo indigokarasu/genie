@@ -78,8 +78,6 @@ DEFAULTS = {
     "commons_path": os.environ.get("GENIE_COMMONS_PATH", os.path.join(PROFILE_HOME, "commons")),
     "backups_path": os.environ.get("GENIE_BACKUPS_PATH", "/root/backups"),
     "tmp_stale_hours": int(os.environ.get("GENIE_TMP_STALE_HOURS", 24)),
-    "git_clone_max_age_days": int(os.environ.get("GENIE_GIT_CLONE_MAX_AGE_DAYS", 5)),
-    "git_clones_path": os.environ.get("GENIE_GIT_CLONES_PATH", "/root/projects"),
 }
 
 # Built-in cleanup targets: path → {tier, action, max_age_days, ...}
@@ -121,13 +119,6 @@ BUILTIN_TARGETS = {
         "max_age_hours": 24, "path": "/tmp",
         "pattern": "/tmp/*",
         "description": "Stale temp files",
-    },
-    "git-clones": {
-        "tier": 1, "action": "delete_git_clones",
-        "max_age_days": 5, "path": "/root/projects",
-        "pattern": "/root/projects/*/",
-        "description": "Inactive git clones (untouched >5d, confirmed remote)",
-        "source": "builtin",
     },
     "cache-pip": {
         "tier": 1, "action": "delete_dir_contents",
@@ -884,79 +875,6 @@ def clean_backups(backups_path, max_age_days, dry_run):
     return result
 
 
-def clean_git_clones(clones_path, max_age_days, dry_run):
-    """Delete git clones that haven't been touched in N days and have a valid remote.
-
-    Safety: only deletes directories that:
-      1. Are git repos (have a .git dir)
-      2. Have at least one remote configured (url = ... in .git/config)
-      3. Haven't been modified (oldest file mtime) in >max_age_days
-    """
-    result = {"action": "git_clones", "tier": 1, "dirs": 0, "skipped_no_remote": 0,
-              "skipped_recent": 0, "bytes_freed": 0, "errors": []}
-    if not os.path.isdir(clones_path):
-        return result
-
-    for entry in os.listdir(clones_path):
-        path = os.path.join(clones_path, entry)
-        if not os.path.isdir(path):
-            continue
-
-        # Must be a git repo
-        git_dir = os.path.join(path, ".git")
-        if not os.path.isdir(git_dir):
-            result["skipped_no_remote"] += 1
-            continue
-
-        # Check age — use oldest file mtime inside the working tree
-        oldest_mtime = os.path.getmtime(path)
-        for dp, _, fns in os.walk(path):
-            # Skip .git internals to avoid packfile noise
-            if ".git" in dp.split(os.sep):
-                continue
-            for fn in fns:
-                fp = os.path.join(dp, fn)
-                try:
-                    m = os.path.getmtime(fp)
-                    if m < oldest_mtime:
-                        oldest_mtime = m
-                except OSError:
-                    continue
-
-        age_days = (datetime.datetime.now().timestamp() - oldest_mtime) / 86400
-        if age_days <= max_age_days:
-            result["skipped_recent"] += 1
-            continue
-
-        # Check that a remote exists (confirming it's a clone, not local-only)
-        remote_check = os.path.join(git_dir, "config")
-        has_remote = False
-        try:
-            with open(remote_check, "r") as f:
-                for line in f:
-                    if line.strip().startswith("url = "):
-                        has_remote = True
-                        break
-        except Exception:
-            pass
-
-        if not has_remote:
-            result["skipped_no_remote"] += 1
-            continue
-
-        # Safe to delete
-        size = du(path)
-        result["dirs"] += 1
-        result["bytes_freed"] += size
-        if not dry_run:
-            try:
-                shutil.rmtree(path)
-            except Exception as e:
-                result["errors"].append(f"rmtree {path}: {e}")
-                result["bytes_freed"] -= size
-    return result
-
-
 def clean_tmp(tmp_path, max_age_hours, dry_run):
     result = {"action": "tmp", "tier": 1, "files": 0, "bytes_freed": 0, "errors": []}
     if not os.path.isdir(tmp_path):
@@ -1200,54 +1118,6 @@ def assess(cfg, targets=None):
                       if age_hours(os.path.join("/tmp", f)) > cfg.get("tmp_stale_hours", 24))
         lines.append(f"/tmp: {fmt(tmp_size)} total, {old_tmp} files/dirs older than {cfg.get('tmp_stale_hours', 24)}h")
 
-    # Git clones
-    gcp = cfg.get("git_clones_path", "/root/projects")
-    if os.path.isdir(gcp):
-        old_clones = 0
-        recent_clones = 0
-        no_remote = 0
-        clones_size = 0
-        for entry in os.listdir(gcp):
-            path = os.path.join(gcp, entry)
-            if not os.path.isdir(path):
-                continue
-            if not os.path.isdir(os.path.join(path, ".git")):
-                no_remote += 1
-                continue
-            oldest_mtime = os.path.getmtime(path)
-            for dp, _, fns in os.walk(path):
-                if ".git" in dp.split(os.sep):
-                    continue
-                for fn in fns:
-                    fp = os.path.join(dp, fn)
-                    try:
-                        m = os.path.getmtime(fp)
-                        if m < oldest_mtime:
-                            oldest_mtime = m
-                    except OSError:
-                        continue
-            clone_age_days = (datetime.datetime.now().timestamp() - oldest_mtime) / 86400
-            if clone_age_days > cfg.get("git_clone_max_age_days", 5):
-                # Check remote exists
-                has_remote = False
-                rc = os.path.join(path, ".git", "config")
-                try:
-                    with open(rc, "r") as f:
-                        for line in f:
-                            if line.strip().startswith("url = "):
-                                has_remote = True
-                                break
-                except Exception:
-                    pass
-                if has_remote:
-                    old_clones += 1
-                    clones_size += du(path)
-                else:
-                    no_remote += 1
-            else:
-                recent_clones += 1
-        lines.append(f"Git clones: {fmt(clones_size)} eligible ({old_clones} inactive >{cfg.get('git_clone_max_age_days', 5)}d, {recent_clones} recent, {no_remote} no-remote)")
-
     # State DB
     dbp = cfg["state_db_path"]
     if os.path.isfile(dbp):
@@ -1294,11 +1164,6 @@ def clean(cfg):
     # /tmp
     if cfg.get("tmp_stale_hours", 0) > 0:
         results.append(clean_tmp("/tmp", cfg["tmp_stale_hours"], cfg["dry_run"]))
-
-    # Git clones (inactive, confirmed remote)
-    git_clones_path = cfg.get("git_clones_path", "/root/projects")
-    if os.path.isdir(git_clones_path):
-        results.append(clean_git_clones(git_clones_path, cfg["git_clone_max_age_days"], cfg["dry_run"]))
 
     # Package caches
     for cache_key, cache_path in [
