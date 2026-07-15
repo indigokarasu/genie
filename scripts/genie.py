@@ -20,7 +20,7 @@ Usage:
 
 FILESYSTEM.md integration:
   If FILESYSTEM.md exists at ~/.hermes/profiles/<profile>/references/FILESYSTEM.md
-  (or the path in GENIE_FILESYSTEM_MD), genie reads the cleanup-manifest section
+  (or the path in skills.config.genie.filesystem_md), genie reads the cleanup-manifest section
   and merges it with built-in defaults. Discovered paths extend — never replace —
   the built-in knowledge.
 
@@ -55,31 +55,85 @@ if HERMES_HOME.endswith(os.path.join("profiles", PROFILE)):
 PROFILE_HOME = os.path.join(HERMES_HOME, "profiles", PROFILE)
 
 # FILESYSTEM.md locations to check (in order)
+# ── Config loading (config.yaml, NOT environment variables) ───────────────
+# Hermes policy (AGENTS.md): non-secret behavioral settings — retention
+# thresholds, dry-run, paths — live in config.yaml under
+# ``skills.config.genie.<key>``, never in environment variables.
+# We resolve them here; CLI flags and built-in defaults supply overrides /
+# fallbacks. (HERMES_HOME / HERMES_PROFILE remain the only env inputs — they
+# locate the runtime, not behavior.)
+
+def _load_root_config() -> dict:
+    """Read $HERMES_HOME/config.yaml via PyYAML. Returns {} if absent/unreadable."""
+    path = os.path.join(HERMES_HOME, "config.yaml")
+    if not os.path.exists(path):
+        return {}
+    try:
+        import yaml  # Hermes already ships PyYAML
+    except Exception:
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _skill_config(key: str, default):
+    """Resolve ``skills.config.genie.<key>`` from config.yaml.
+
+    Falls back to ``default`` when the key is unset or empty. Boolean and int
+    coercion follows the declared default's type.
+    """
+    node = _load_root_config()
+    for part in ("skills", "config", "genie", key):
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            return default
+    if node is None or (isinstance(node, str) and not node.strip()):
+        return default
+    if isinstance(default, bool):
+        return str(node).strip().lower() in {"1", "true", "yes", "on"}
+    if isinstance(default, int):
+        try:
+            return int(node)
+        except (TypeError, ValueError):
+            return default
+    return node
+
+
+# FILESYSTEM.md locations to check (in order). The first entry is the optional
+# override path, configurable via skills.config.genie.filesystem_md.
 FILESYSTEM_MD_PATHS = [
-    os.environ.get("GENIE_FILESYSTEM_MD", ""),
+    os.path.expanduser(str(_skill_config("filesystem_md", "") or "")),
     os.path.join(PROFILE_HOME, "references", "FILESYSTEM.md"),
     os.path.join(HERMES_HOME, "references", "FILESYSTEM.md"),
     os.path.join(HERMES_HOME, "FILESYSTEM.md"),
 ]
 
 DEFAULTS = {
-    "snapshot_max_age_days": int(os.environ.get("GENIE_SNAPSHOT_MAX_AGE_DAYS", 7)),
-    "log_compress_age_days": int(os.environ.get("GENIE_LOG_COMPRESS_AGE_DAYS", 7)),
-    "log_delete_age_days": int(os.environ.get("GENIE_LOG_DELETE_AGE_DAYS", 30)),
-    "cron_output_compress_age_days": int(os.environ.get("GENIE_CRON_OUTPUT_COMPRESS_AGE_DAYS", 7)),
-    "session_compress_age_days": int(os.environ.get("GENIE_SESSION_COMPRESS_AGE_DAYS", 14)),
-    "dry_run": os.environ.get("GENIE_DRY_RUN", "false").lower() == "true",
-    "tier_limit": os.environ.get("GENIE_TIER_LIMIT", "3"),
-    "state_db_path": os.environ.get("GENIE_STATE_DB_PATH", os.path.join(PROFILE_HOME, "state.db")),
-    "sessions_path": os.environ.get("GENIE_SESSIONS_PATH", os.path.join(PROFILE_HOME, "sessions")),
-    "logs_path": os.environ.get("GENIE_LOGS_PATH", os.path.join(PROFILE_HOME, "logs")),
-    "cron_output_path": os.environ.get("GENIE_CRON_OUTPUT_PATH", os.path.join(PROFILE_HOME, "cron-output")),
-    "snapshots_path": os.environ.get("GENIE_SNAPSHOTS_PATH", os.path.join(PROFILE_HOME, "state-snapshots")),
-    "commons_path": os.environ.get("GENIE_COMMONS_PATH", os.path.join(PROFILE_HOME, "commons")),
-    "backups_path": os.environ.get("GENIE_BACKUPS_PATH", "/root/backups"),
-    "tmp_stale_hours": int(os.environ.get("GENIE_TMP_STALE_HOURS", 24)),
-    "git_clone_max_age_days": int(os.environ.get("GENIE_GIT_CLONE_MAX_AGE_DAYS", 5)),
-    "git_clones_path": os.environ.get("GENIE_GIT_CLONES_PATH", "/root/projects"),
+    "snapshot_max_age_days": _skill_config("snapshot_max_age_days", 7),
+    "log_compress_age_days": _skill_config("log_compress_age_days", 7),
+    "log_delete_age_days": _skill_config("log_delete_age_days", 30),
+    "cron_output_compress_age_days": _skill_config("cron_output_compress_age_days", 7),
+    "session_compress_age_days": _skill_config("session_compress_age_days", 14),
+    "dry_run": _skill_config("dry_run", False),
+    "tier_limit": "3",
+    "state_db_path": os.path.join(PROFILE_HOME, "state.db"),
+    "sessions_path": os.path.join(PROFILE_HOME, "sessions"),
+    "logs_path": os.path.join(PROFILE_HOME, "logs"),
+    "cron_output_path": os.path.join(PROFILE_HOME, "cron-output"),
+    "snapshots_path": os.path.join(PROFILE_HOME, "state-snapshots"),
+    "commons_path": os.path.join(PROFILE_HOME, "commons"),
+    "backups_path": "/root/backups",
+    "backup_paths": ["/root/backup", "/root/backups"],
+    "historical_backup_keep_count": 1,
+    "tmp_stale_hours": _skill_config("tmp_stale_hours", 24),
+    "git_clone_max_age_days": _skill_config("git_clone_max_age_days", 5),
+    "git_clones_path": "/root/projects",
+    "allow_local_state_db_backup": _skill_config("allow_local_state_db_backup", False),
 }
 
 # Built-in cleanup targets: path → {tier, action, max_age_days, ...}
@@ -191,6 +245,125 @@ def age_days(path):
 
 def age_hours(path):
     return (datetime.datetime.now().timestamp() - os.path.getmtime(path)) / 3600
+
+
+def historical_backup_candidates(cfg):
+    """Return historical backup candidates governed by the one-backup VPS policy.
+
+    Live databases are intentionally excluded. Candidates are backup copies,
+    snapshots, and migration/pre-migration backups that can accumulate alongside
+    live data.
+    """
+    candidates = []
+    seen = set()
+
+    def backup_score(path):
+        """Higher means a more complete backup candidate.
+
+        Prevents a tiny partial retry directory from superseding the previous
+        complete backup merely because it has a newer mtime.
+        """
+        if not os.path.isdir(path):
+            return 1
+        key_files = {
+            "state.db", "chroma.sqlite3", "chronicle.lbug", "weave.lbug",
+            "styx.db", "transactions.db", "mempalace.tar.gz",
+        }
+        try:
+            names = set(os.listdir(path))
+        except OSError:
+            return 0
+        hits = len(key_files & names)
+        return hits if hits else 1
+
+    def add(path, kind):
+        if not path or path in seen or not os.path.exists(path):
+            return
+        seen.add(path)
+        try:
+            size = du(path)
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return
+        candidates.append({
+            "path": path,
+            "kind": kind,
+            "size": size,
+            "mtime": mtime,
+            "score": backup_score(path),
+            "timestamp": datetime.datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
+        })
+
+    for base in cfg.get("backup_paths", []):
+        if os.path.isdir(base):
+            for entry in os.listdir(base):
+                add(os.path.join(base, entry), f"backup:{base}")
+
+    snapshots = cfg.get("snapshots_path")
+    if snapshots and os.path.isdir(snapshots):
+        for entry in os.listdir(snapshots):
+            path = os.path.join(snapshots, entry)
+            if os.path.isdir(path):
+                add(path, "state-snapshot")
+
+    migrations = os.path.join(HERMES_HOME, "migrations")
+    if os.path.isdir(migrations):
+        for dp, dirs, files in os.walk(migrations):
+            if os.path.basename(dp) == "backups":
+                for entry in dirs + files:
+                    add(os.path.join(dp, entry), "migration-backup")
+                dirs[:] = []
+                continue
+            if dp.count(os.sep) - migrations.count(os.sep) > 4:
+                dirs[:] = []
+
+    profiles = os.path.join(HERMES_HOME, "profiles")
+    if os.path.isdir(profiles):
+        for dp, dirs, files in os.walk(profiles):
+            for f in files:
+                if ".bak-" in f:
+                    add(os.path.join(dp, f), "db-bak")
+            if dp.count(os.sep) - profiles.count(os.sep) > 7:
+                dirs[:] = []
+
+    candidates.sort(key=lambda item: (item["score"], item["mtime"]), reverse=True)
+    return candidates
+
+
+def backup_retention_plan(cfg):
+    candidates = historical_backup_candidates(cfg)
+    # Snapshots are owned by clean_snapshots(), which always preserves the most
+    # recent one. Exclude them here so the cross-class "keep 1" rule can never
+    # reclaim a snapshot — this is the bug that deleted the 13 GB pre-update
+    # rollback snapshot on 2026-07-12 (backup_retention kept a newer
+    # transactions.db copy and rm -rf'd the snapshot because it was not the
+    # single newest of all backup-class files).
+    candidates = [c for c in candidates if c.get("kind") != "state-snapshot"]
+    # Local full state.db copies are not valid retained backups by default: they
+    # duplicate live data and are the primary disk-balloon failure mode. They are
+    # removed unless explicitly allowed via skills.config.genie.allow_local_state_db_backup.
+    allow_state_db = cfg.get("allow_local_state_db_backup", False)
+    invalid = []
+    valid = []
+    for item in candidates:
+        if not allow_state_db and os.path.isdir(item["path"]) and os.path.exists(os.path.join(item["path"], "state.db")):
+            item["invalid_reason"] = "local full state.db backup"
+            invalid.append(item)
+        else:
+            valid.append(item)
+
+    keep_count = max(1, int(cfg.get("historical_backup_keep_count", 1)))
+    keep = valid[:keep_count]
+    reclaim = invalid + valid[keep_count:]
+    return {
+        "action": "backup_retention",
+        "tier": 1,
+        "keep_count": keep_count,
+        "total": len(candidates),
+        "keep": keep,
+        "reclaim": reclaim,
+        "bytes_reclaimable": sum(item["size"] for item in reclaim),
+    }
 
 
 def gzip_file(src, dry_run):
@@ -850,37 +1023,39 @@ def clean_cron_output(cron_output_path, compress_age_days, dry_run):
     return result
 
 
-def clean_backups(backups_path, max_age_days, dry_run):
-    result = {"action": "backups", "tier": 1, "dirs": 0, "bytes_freed": 0, "errors": []}
-    if not os.path.isdir(backups_path):
-        return result
+def clean_backup_retention(cfg, dry_run):
+    """Enforce one historical backup on the VPS.
 
-    for entry in os.listdir(backups_path):
-        path = os.path.join(backups_path, entry)
-        if not os.path.isdir(path):
-            # Also clean old individual files in backups/
-            if os.path.isfile(path) and age_days(path) > max_age_days:
-                size = os.path.getsize(path)
-                result["dirs"] += 1
-                result["bytes_freed"] += size
-                if not dry_run:
-                    try:
-                        os.remove(path)
-                    except Exception as e:
-                        result["errors"].append(f"remove {path}: {e}")
-                        result["bytes_freed"] -= size
+    Keeps the newest candidate and removes older backup/snapshot copies. This
+    replaces age-only backup cleanup: retention is count-based because a single
+    accidental 12GB state.db copy can fill the disk even when it is minutes old.
+    """
+    plan = backup_retention_plan(cfg)
+    result = {
+        "action": "backup_retention",
+        "tier": 1,
+        "kept": [item["path"] for item in plan["keep"]],
+        "removed": 0,
+        "bytes_freed": 0,
+        "errors": [],
+    }
+
+    for item in plan["reclaim"]:
+        path = item["path"]
+        size = item["size"]
+        result["removed"] += 1
+        result["bytes_freed"] += size
+        if dry_run:
             continue
-
-        if age_days(path) > max_age_days:
-            size = du(path)
-            result["dirs"] += 1
-            result["bytes_freed"] += size
-            if not dry_run:
-                try:
-                    shutil.rmtree(path)
-                except Exception as e:
-                    result["errors"].append(f"rmtree {path}: {e}")
-                    result["bytes_freed"] -= size
+        try:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+        except Exception as e:
+            result["errors"].append(f"remove {path}: {e}")
+            result["bytes_freed"] -= size
+            result["removed"] -= 1
     return result
 
 
@@ -1184,14 +1359,13 @@ def assess(cfg, targets=None):
             f"{fmt(json_size)} total, {old_json} older than "
             f"{cfg['session_compress_age_days']}d compressible")
 
-    # Backups
-    bp = cfg["backups_path"]
-    if os.path.isdir(bp):
-        backup_size = du(bp)
-        old_backup_dirs = sum(1 for d in os.listdir(bp)
-                              if os.path.isdir(os.path.join(bp, d))
-                              and age_days(os.path.join(bp, d)) > 30)
-        lines.append(f"Backups: {fmt(backup_size)} total, {old_backup_dirs} dirs older than 30d")
+    # Historical backup retention
+    retention = backup_retention_plan(cfg)
+    if retention["total"]:
+        kept = retention["keep"][0]["path"] if retention["keep"] else "none"
+        lines.append(
+            f"Historical backups: {retention['total']} found, keep 1 ({kept}), "
+            f"{len(retention['reclaim'])} reclaimable ({fmt(retention['bytes_reclaimable'])})")
 
     # /tmp
     if os.path.isdir("/tmp"):
@@ -1287,9 +1461,8 @@ def clean(cfg):
     results.append(clean_cron_output(cfg["cron_output_path"],
                                      cfg["cron_output_compress_age_days"], cfg["dry_run"]))
 
-    # Backups
-    if cfg.get("backups_path") and os.path.isdir(cfg["backups_path"]):
-        results.append(clean_backups(cfg["backups_path"], 30, cfg["dry_run"]))
+    # Historical backups — count-based retention, keep newest valid candidate.
+    results.append(clean_backup_retention(cfg, cfg["dry_run"]))
 
     # /tmp
     if cfg.get("tmp_stale_hours", 0) > 0:
