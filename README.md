@@ -1,12 +1,72 @@
-# genie
+# ⚙️ Genie
 
-<p align="center">
-  <img src="./assets/readme/hero.jpg" width="100%" alt="Genie: VPS disk cleanup and backup retention management">
-</p>
+  <img src="./assets/readme/hero.jpg" width="100%" alt="Genie">
 
-Genie audits disk usage on a VPS, cleans up safely, and manages backup retention. It runs from the terminal, uses standard libraries only, and has no external dependencies. The self-update path uses `gh` for release fetches.
+If true, only report — don't delete/compress
 
-**Capabilities:**
-- Root filesystem audit with summary breakdown
-- Safe cleanup targets (logs, cache, old archives)
-- Backup retention with configurable age thresholds
+**Skill name:** `ocas-genie`
+**Version:** 1.7.0
+**Type:** 
+**Layer:** infrastructure
+**Author:** Indigo Karasu
+
+---
+
+## 📖 Overview
+
+If true, only report — don't delete/compress
+
+---
+
+## 🔧 Commands
+
+- `/root` needs a safe audit/classification pass
+- `/root/backup/*`
+- `/root/backups/*`
+- `<hermes-root>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-root>/state-snapshots` is a different, usually-empty path)
+- `<hermes-root>/migrations/*/backups/*`
+- `<hermes-home>/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
+- `<hermes-home>/scripts/genie.py` (profile scripts dir — alternate location)
+- `<hermes-root>/skills/ocas-genie/scripts/genie.py` (skill-bundled)
+- `df -h /` — check disk usage dropped
+- `du -sh <hermes-root>/` — check .hermes size
+
+---
+
+## 📊 Outputs
+
+See `SKILL.md` for outputs, journals, and persistence rules.
+
+---
+
+## 📄 Files
+
+| File | Purpose |
+|---|---|
+| `SKILL.md` | Skill definition |
+| `references/` | Supporting documentation |
+| `scripts/` | Helper scripts |
+
+
+## Changelog
+
+- [1.1.0] - 2026-05-23
+- Added
+- Changed
+- [1.0.0] - 2026-04-20
+- Added
+
+---
+
+## 📚 Documentation
+
+Read `SKILL.md` for operational details, schemas, and validation rules.
+
+Read `references/` for detailed specifications and examples.
+
+
+---
+
+## 📄 License
+
+MIT License — see `LICENSE` for details.
