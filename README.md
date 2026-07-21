@@ -1,24 +1,12 @@
 # genie
 
 <p align="center">
-<img src="./assets/readme/hero.jpg" width="100%" alt="Genie: VPS disk space monitor and safe cleanup for OCAS">
+  <img src="./assets/readme/hero.jpg" width="100%" alt="Genie: VPS disk cleanup and backup retention management">
 </p>
 
-genie — Genie: VPS disk space monitor and safe cleanup for OCAS
+Genie audits disk usage on a VPS, cleans up safely, and manages backup retention. It runs from the terminal, uses standard libraries only, and has no external dependencies. The self-update path uses `gh` for release fetches.
 
-
-> Tell it what you need. It does the work.
-
-## Dependencies
-
-- Python 3.11+
-- gh CLI for self-update
-- Standard library only (no pip packages)
-
-## Changelog
-
-See CHANGELOG.md.
-
----
-
-*genie is part of the [OCAS Agent Suite](https://github.com/indigokarasu).*
+**Capabilities:**
+- Root filesystem audit with summary breakdown
+- Safe cleanup targets (logs, cache, old archives)
+- Backup retention with configurable age thresholds
