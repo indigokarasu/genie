@@ -1,7 +1,7 @@
 # genie
 
 <p align="center">
-<img src="./assets/readme/hero.svg" width="100%" alt="Genie: VPS disk space monitor and safe cleanup for OCAS">
+<img src="./assets/readme/hero.jpg" width="100%" alt="Genie: VPS disk space monitor and safe cleanup for OCAS">
 </p>
 
 genie — Genie: VPS disk space monitor and safe cleanup for OCAS
