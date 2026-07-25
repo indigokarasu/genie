@@ -9,7 +9,7 @@ Usage:
 
 import sqlite3, sys, os, time
 
-DB_PATH = "<hermes-root>/state.db"
+DB_PATH = "~/.hermes/state.db"
 
 TRIGGER_SQL = """
 CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN

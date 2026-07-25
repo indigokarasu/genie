@@ -23,13 +23,13 @@ If true, only report — don't delete/compress
 - `/root` needs a safe audit/classification pass
 - `/root/backup/*`
 - `/root/backups/*`
-- `<hermes-root>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-root>/state-snapshots` is a different, usually-empty path)
-- `<hermes-root>/migrations/*/backups/*`
-- `<hermes-home>/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
-- `<hermes-home>/scripts/genie.py` (profile scripts dir — alternate location)
-- `<hermes-root>/skills/ocas-genie/scripts/genie.py` (skill-bundled)
+- `<hermes-home>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-home>/state-snapshots` is a different, usually-empty path)
+- `<hermes-home>/migrations/*/backups/*`
+- `<hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
+- `<hermes-home>/profiles/indigo/scripts/genie.py` (profile scripts dir — alternate location)
+- `<hermes-home>/skills/ocas-genie/scripts/genie.py` (skill-bundled)
 - `df -h /` — check disk usage dropped
-- `du -sh <hermes-root>/` — check .hermes size
+- `du -sh <hermes-home>/` — check .hermes size
 
 ---
 

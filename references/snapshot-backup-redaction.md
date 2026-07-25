@@ -18,7 +18,7 @@ Every snapshot directory may contain:
 
 ```bash
 # 1. Copy snapshot to repo backup location
-cp -a <hermes-root>/state-snapshots/<snapshot-name> /root/indigo-repo/backups/state-snapshots/
+cp -a <hermes-home>/state-snapshots/<snapshot-name> /root/indigo-repo/backups/state-snapshots/
 
 # 2. Redact auth.json (replace entirely)
 echo '{"redacted": true, "note": "Credentials stripped for backup"}' \

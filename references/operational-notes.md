@@ -34,8 +34,8 @@
 Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timestamp jobs as workaround.
 
 ## Script Locations
-- Production: <hermes-root>/scripts/genie.py
-- Skill-bundled: <hermes-root>/skills/ocas-genie/scripts/genie.py
+- Production: <hermes-home>/scripts/genie.py
+- Skill-bundled: <hermes-home>/skills/ocas-genie/scripts/genie.py
 
 ## Cron Job
 - Job ID: e3adc3e31181
@@ -107,13 +107,13 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 - BUT process was actually running (PID 1069920, up 3h51m, RSS ~480MB)
 - Telegram was connected (polling mode, 60 commands, 158 channel targets)
 - Root cause: systemd lost tracking of the process (started with `--profile indigo` but systemd service name mismatch)
-- **Correct health check**: verify process via `pgrep -f "hermes.*gateway"` AND check profile-specific log at `<hermes-home>/logs/gateway.log` for "✓ telegram connected"
+- **Correct health check**: verify process via `pgrep -f "hermes.*gateway"` AND check profile-specific log at `<hermes-home>/profiles/indigo/logs/gateway.log` for "✓ telegram connected"
 - Do NOT trust `systemctl --user is-active` alone for gateway health
 
 ### Key Learnings
 1. **camoufox cache is a new large consumer**: stealth browser profile cache at `/root/.cache/camoufox/` was 1.4 GB. Not covered by genie's built-in cache rules. Safe to `rm -rf` (rebuildable on next browser use).
 2. **Gateway health requires multi-signal check**: systemd state can be stale. Always cross-check process existence + profile-specific gateway log for Telegram connection status.
-3. **Script path gotcha confirmed**: The skill's documented path (`<hermes-home>/skills/genie/scripts/genie.py`) does NOT match reality (`ocas-genie/` prefix). Patched in this session.
+3. **Script path gotcha confirmed**: The skill's documented path (`<hermes-home>/profiles/indigo/skills/genie/scripts/genie.py`) does NOT match reality (`ocas-genie/` prefix). Patched in this session.
 
 ### Remaining Concerns
 - `/root/backup/`: 9.4 GB single directory from June 2026-06-24 (chroma.sqlite3 + chronicle.lbug) — manual review needed
@@ -208,4 +208,4 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 ### Remaining Concerns
 - chronicle.db: 6.1G + 930M WAL (wal_checkpoint could reclaim WAL space)
 - state.db: 11G (VACUUM only saves ~0.5G per Inception testing)
-- Indigo profile total: 27G (chronicle + state.db = 17G, remaining 10G across commons/data, node, skills, logs)
+- the agent profile total: 27G (chronicle + state.db = 17G, remaining 10G across commons/data, node, skills, logs)

@@ -26,11 +26,11 @@ A large state.db (e.g. 15 GB) typically breaks down as:
 ## What Works (Copy + Drop FTS + .backup)
 
 ```bash
-cp <hermes-root>/state.db <hermes-root>/backups/state-tmp.db
-sqlite3 <hermes-root>/backups/state-tmp.db "DROP TABLE IF EXISTS messages_fts; DROP TABLE IF EXISTS messages_fts_trigram;"
-sqlite3 <hermes-root>/backups/state-tmp.db ".backup '<hermes-root>/backups/state-nofts.db'"
-pigz -6 <hermes-root>/backups/state-nofts.db
-rm -f <hermes-root>/backups/state-tmp.db
+cp <hermes-home>/state.db <hermes-home>/backups/state-tmp.db
+sqlite3 <hermes-home>/backups/state-tmp.db "DROP TABLE IF EXISTS messages_fts; DROP TABLE IF EXISTS messages_fts_trigram;"
+sqlite3 <hermes-home>/backups/state-tmp.db ".backup '<hermes-home>/backups/state-nofts.db'"
+pigz -6 <hermes-home>/backups/state-nofts.db
+rm -f <hermes-home>/backups/state-tmp.db
 ```
 
 **Space budget**: `.backup` creates a full copy — peak space ≈ 2x the DB size. For a 15 GB DB, that's ~30 GB peak. Only attempt on disks with sufficient headroom.
@@ -63,7 +63,7 @@ On very large state.db files (5+ GB), even `VACUUM` via `sqlite3` CLI can time o
 
 1. **Check DB is live and real** — confirm not a symlink first:
    ```bash
-   file <hermes-root>/state.db  # if symlink, resolve: readlink -f <hermes-root>/state.db
+   file <hermes-home>/state.db  # if symlink, resolve: readlink -f <hermes-home>/state.db
    ```
 
 2. **Attempt full VACUUM with generous timeout**, but warn user it may take 10+ minutes for 11 GB:
