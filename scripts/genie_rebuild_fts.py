@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 """
 genie_rebuild_fts.py — Rebuild FTS indexes on a no-FTS state.db.
 Run inside a test container after restoring a compressed backup.
@@ -9,7 +10,7 @@ Usage:
 
 import sqlite3, sys, os, time
 
-DB_PATH = "~/.hermes/state.db"
+DB_PATH = os.path.expanduser("~/.hermes/state.db")
 
 TRIGGER_SQL = """
 CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN
