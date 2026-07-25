@@ -44,7 +44,7 @@ import sqlite3
 
 # ── Configuration ──────────────────────────────────────────────────────────
 
-HERMES_HOME = os.environ.get("HERMES_HOME", "~/.hermes")
+HERMES_HOME = os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes"))
 PROFILE = os.environ.get("HERMES_PROFILE", "indigo")
 
 # Handle the case where HERMES_HOME already includes the profile path
@@ -673,7 +673,7 @@ Generated from filesystem walk at {now}:
 """
 
     # Add discovered directory tree
-    for base_label, base_path in [("~/.hermes", HERMES_HOME), (f"profiles/{PROFILE}", PROFILE_HOME)]:
+    for base_label, base_path in [(os.path.expanduser("~/.hermes"), HERMES_HOME), (f"profiles/{PROFILE}", PROFILE_HOME)]:
         if os.path.isdir(base_path):
             content += f"### {base_path}\n\n```\n"
             try:
