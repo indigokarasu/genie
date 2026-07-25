@@ -10,16 +10,27 @@ Always start by enumerating every `state.db` on the full filesystem (not just `/
 find / -name "state.db" -type f 2>/dev/null
 ```
 
+<<<<<<< Updated upstream
 **Symlink dedup**: `<hermes-home>/state.db` is often a symlink to a profile DB. Resolve with `readlink -f` and check inodes (`ls -li`) to determine true duplicates. Multiple found paths may point to the same underlying file.
+=======
+**Symlink dedup**: `~/.hermes/state.db` is often a symlink to a profile DB. Resolve with `readlink -f` and check inodes (`ls -li`) to determine true duplicates. Multiple found paths may point to the same underlying file.
+>>>>>>> Stashed changes
 
 ## Identify candidates for deletion
 
 For each found file, check:
 
+<<<<<<< Updated upstream
 1. **Current live DB** — the one inside the active profile (usually `<hermes-home>/state.db` or `<hermes-home>/profiles/<name>/state.db`). KEEP.
 2. **Other profiles** — per-profile copies. Keep only if the profile is still active. Ask before deleting.
 3. **Backups** — dated directories in `<fs-root>/backup/`. Keep the newest, delete older ones.
 4. **Snapshots** — `<hermes-home>/state-snapshots/*/state.db`. Keep the most recent (genie never auto-deletes these).
+=======
+1. **Current live DB** — the one inside the active profile (usually `~/.hermes/state.db` or `~/.hermes/profiles/<name>/state.db`). KEEP.
+2. **Other profiles** — per-profile copies. Keep only if the profile is still active. Ask before deleting.
+3. **Backups** — dated directories in `<fs-root>/backup/`. Keep the newest, delete older ones.
+4. **Snapshots** — `~/.hermes/state-snapshots/*/state.db`. Keep the most recent (genie never auto-deletes these).
+>>>>>>> Stashed changes
 
 ## Deletion sequence
 

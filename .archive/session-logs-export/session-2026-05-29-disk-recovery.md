@@ -1,7 +1,11 @@
 # Session: 2026-05-29 Disk Recovery
 
 ## Started at 100% (96G/96G, 0 avail)
+<<<<<<< Updated upstream
 **Root cause**: <home-dir>/backups/current (17G) filled the disk.
+=======
+**Root cause**: <fs-root>/indigo/backups/current (17G) filled the disk.
+>>>>>>> Stashed changes
 That was removed between task creation and execution. Arrived to find 81% (19G free).
 
 ## What was cleaned and how much
@@ -23,7 +27,11 @@ That was removed between task creation and execution. Arrived to find 81% (19G f
 
 ## Remaining large consumers (non-critical at 62%)
 - <fs-root>/indigo-repo: 5.1G (data/ has chroma.sqlite3 253M, backups duplicate data/)
+<<<<<<< Updated upstream
 - <fs-root>/backups/sessions.tar.gz: 2.6G (15K session JSONs already in state.db)
+=======
+- <backups-root>/sessions.tar.gz: 2.6G (15K session JSONs already in state.db)
+>>>>>>> Stashed changes
 - /var/lib/docker: 1.8G
 - /var/lib/containerd: 2.2G
 

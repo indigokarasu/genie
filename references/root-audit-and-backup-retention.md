@@ -16,10 +16,17 @@ Only one historical backup may remain on the VPS at a time, in addition to curre
 Common historical-backup paths:
 
 - `<fs-root>/backup/*`
+<<<<<<< Updated upstream
 - `<fs-root>/backups/*`
 - `<hermes-home>/state-snapshots/*`
 - `<hermes-home>/migrations/*/backups/*`
 - profile DB `.bak-*` files under `<hermes-home>/profiles/*/commons/db/`
+=======
+- `<backups-root>/*`
+- `~/.hermes/state-snapshots/*`
+- `~/.hermes/migrations/*/backups/*`
+- profile DB `.bak-*` files under `~/.hermes/profiles/*/commons/db/`
+>>>>>>> Stashed changes
 
 ## When routine Genie cleanup is insufficient
 
@@ -44,7 +51,11 @@ find / -xdev -type f -size +100M -mtime -3 -printf '%TY-%Tm-%Td %TH:%TM %s %p\n'
 Also inspect likely large subtrees:
 
 ```bash
+<<<<<<< Updated upstream
 du -xhd2 <hermes-home> <fs-root>/projects <fs-root>/backup <fs-root>/backups /var 2>/dev/null | sort -hr | head -100
+=======
+du -xhd2 ~/.hermes <projects-root> <fs-root>/backup <backups-root> /var 2>/dev/null | sort -hr | head -100
+>>>>>>> Stashed changes
 ```
 
 ## Phase 2 — Backup retention audit
@@ -52,7 +63,11 @@ du -xhd2 <hermes-home> <fs-root>/projects <fs-root>/backup <fs-root>/backups /va
 Find all historical backup candidates and enforce the one-backup rule.
 
 ```bash
+<<<<<<< Updated upstream
 find <fs-root>/backup <fs-root>/backups <hermes-home>/state-snapshots <hermes-home>/migrations -xdev -mindepth 1 -maxdepth 4 \
+=======
+find <fs-root>/backup <backups-root> ~/.hermes/state-snapshots ~/.hermes/migrations -xdev -mindepth 1 -maxdepth 4 \
+>>>>>>> Stashed changes
   \( -type f -o -type d \) -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null | sort -r | head -200
 
 find /root -xdev \( -name 'state.db*' -o -name 'chronicle.db*' -o -name 'chroma.sqlite3*' -o -name '*.bak-*' \) \
@@ -99,7 +114,11 @@ ps aux | grep '<fs-root>/' | grep -v grep | grep -v '.hermes' || true
 grep -n '<fs-root>/' <fs-root>/.bashrc <fs-root>/.profile <fs-root>/.zshrc 2>/dev/null | grep -v '#' || true
 crontab -l 2>/dev/null || true
 hermes cron list 2>/dev/null || true
+<<<<<<< Updated upstream
 grep '<fs-root>/' <hermes-home>/config.yaml <hermes-home>/profiles/*/config.yaml 2>/dev/null || true
+=======
+grep '<fs-root>/' ~/.hermes/config.yaml ~/.hermes/profiles/*/config.yaml 2>/dev/null || true
+>>>>>>> Stashed changes
 ```
 
 For loose Python files, check actual import statements, not substring matches.
@@ -130,7 +149,11 @@ hermes status 2>/dev/null || true
 
 ## Known pitfall — symlinked state.db backups
 
+<<<<<<< Updated upstream
 `<hermes-home>/state.db` may be a symlink to `<hermes-home>/profiles/indigo/state.db`. A backup script that uses `stat -c%s` on the symlink sees the symlink length, not the 12GB+ target. Use `readlink -f` and `stat -L` before copying. If available space is less than target size plus margin, skip the local state backup instead of filling the disk.
+=======
+`~/.hermes/state.db` may be a symlink to `~/.hermes/profiles/indigo/state.db`. A backup script that uses `stat -c%s` on the symlink sees the symlink length, not the 12GB+ target. Use `readlink -f` and `stat -L` before copying. If available space is less than target size plus margin, skip the local state backup instead of filling the disk.
+>>>>>>> Stashed changes
 
 ## Known pitfall — partial backup newer than complete backup
 

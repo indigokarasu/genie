@@ -14,8 +14,8 @@ Standard GitHub tarball update via gh CLI. Runs silently.
 The repo's default branch is **`main`**, not `master`. Always use `main` in raw GitHub URLs:
 
 ```
-https://raw.githubusercontent.com/indigokarasu/genie/main/scripts/genie.py
-https://raw.githubusercontent.com/indigokarasu/genie/main/SKILL.md
+https://raw.githubusercontent.com/<agent-handle>/genie/main/scripts/genie.py
+https://raw.githubusercontent.com/<agent-handle>/genie/main/SKILL.md
 ```
 
 Using `master` will return 404 or stale content.
@@ -27,7 +27,7 @@ After confirming versions match, always compare the remote `genie.py` hash again
 all local copies:
 
 ```bash
-curl -sL "https://raw.githubusercontent.com/indigokarasu/genie/main/scripts/genie.py" | md5sum
+curl -sL "https://raw.githubusercontent.com/<agent-handle>/genie/main/scripts/genie.py" | md5sum
 md5sum ~/.hermes/scripts/genie.py
 md5sum ~/.hermes/skills/ocas-genie/scripts/genie.py
 md5sum ~/.hermes/profiles/indigo/skills/ocas-genie/scripts/genie.py
