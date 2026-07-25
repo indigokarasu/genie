@@ -44,11 +44,11 @@ import sqlite3
 
 # ── Configuration ──────────────────────────────────────────────────────────
 
-HERMES_HOME = os.environ.get("HERMES_HOME", "<hermes-root>")
+HERMES_HOME = os.environ.get("HERMES_HOME", "~/.hermes")
 PROFILE = os.environ.get("HERMES_PROFILE", "indigo")
 
 # Handle the case where HERMES_HOME already includes the profile path
-# (e.g., HERMES_HOME=<hermes-home> when running in profile context)
+# (e.g., HERMES_HOME=~/.hermes/profiles/indigo when running in profile context)
 if HERMES_HOME.endswith(os.path.join("profiles", PROFILE)):
     HERMES_HOME = os.path.dirname(os.path.dirname(HERMES_HOME))
 
