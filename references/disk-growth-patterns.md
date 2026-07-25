@@ -17,14 +17,14 @@ ls -la <hermes-home>/state-snapshots/
 rm -rf <hermes-home>/state-snapshots/20260620-XXXXXX-pre-update/  # old one
 ```
 
-## /root/backup/
+## <fs-root>/backup/
 
-Manually created backups in `/root/backup/YYYYMMDD_HHMMSS/` follow the same pattern: state.db dominates. On June 24 the backup was 9.4 GB (9.0 GB state.db + 253 MB chroma.sqlite3 + smaller DBs).
+Manually created backups in `<fs-root>/backup/YYYYMMDD_HHMMSS/` follow the same pattern: state.db dominates. On June 24 the backup was 9.4 GB (9.0 GB state.db + 253 MB chroma.sqlite3 + smaller DBs).
 
 **These are separate from state-snapshots/** and from genie's retention. Ask the user before deleting — they may want to keep one historical restore point.
 
 ```bash
-du -sh /root/backup/*/ | sort -rh
+du -sh <fs-root>/backup/*/ | sort -rh
 ```
 
 ## Migration Backups (migrations/)
@@ -86,7 +86,7 @@ To identify what grew since last check:
 
 ```bash
 # Top-level summary
-du -sh /root/*/ /root/.*/ 2>/dev/null | sort -rh | head -20
+du -sh <fs-root>/*/ <fs-root>/.*/ 2>/dev/null | sort -rh | head -20
 
 # Deep dive into .hermes
 du -sh <hermes-home>/*/ <hermes-home>/profiles/*/ 2>/dev/null | sort -rh

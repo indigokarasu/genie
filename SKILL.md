@@ -101,8 +101,8 @@ For large file counts (>2,000), run in background: `terminal(background=True, no
 The VPS should keep **only one historical backup at a time**, plus current live data. Genie owns detecting and reporting violations.
 
 Historical backup candidates include:
-- `/root/backup/*`
-- `/root/backups/*`
+- `<fs-root>/backup/*`
+- `<fs-root>/backups/*`
 - `<hermes-home>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-home>/state-snapshots` is a different, usually-empty path)
 - `<hermes-home>/migrations/*/backups/*`
 - profile DB `.bak-*` files under `<hermes-home>/profiles/*/commons/db/`
@@ -136,7 +136,7 @@ For the full audit workflow, see `references/root-audit-and-backup-retention.md`
 
 Some large disk consumers require an audit pass before cleanup because they may be live data, backups, or duplicate worktrees. Use `references/root-audit-and-backup-retention.md` for the full procedure.
 
-1. **Manual backups** (`/root/backup/`, `/root/backups/`) — enforce one historical backup total on the VPS. Keep newest valid backup; older backups are reclaimable.
+1. **Manual backups** (`<fs-root>/backup/`, `<fs-root>/backups/`) — enforce one historical backup total on the VPS. Keep newest valid backup; older backups are reclaimable.
 2. **Pre-update snapshots** (`<hermes-home>/profiles/<profile>/state-snapshots/`) — count as historical backups. Keep only the newest valid one once the post-update gateway is confirmed healthy. **CAUTION:** `backup_retention` may delete this snapshot despite the preservation rule (see Known Issues) — verify it survived after every `--clean`.
 3. **Migration backups** (`<hermes-home>/migrations/*/backups/`) — count as historical backups. Keep only if they are the newest/only valid historical backup.
 4. **Pre-migration `.bak-*` files** (`profiles/*/commons/db/*/.bak-*`) — count as historical backups. Reclaim older ones once the live DB has newer writes and integrity checks pass.
@@ -157,7 +157,7 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 - If any operation fails, report the error and continue
 - If a snapshot deletion fails, leave the snapshot in place and report at the end
 - The most recent snapshot is always preserved (never auto-deleted) — **NOTE: this is currently undermined by `backup_retention` (see Known Issues); verify the snapshot dir survived after every `--clean`, do not assume it from the summary line.**
-- **Do not preserve multiple backups**: The VPS policy is one historical backup plus current live data. Count all historical backup classes together (`/root/backup`, `/root/backups`, snapshots, migration backups, `.bak-*`) and report/remove older valid copies.
+- **Do not preserve multiple backups**: The VPS policy is one historical backup plus current live data. Count all historical backup classes together (`<fs-root>/backup`, `<fs-root>/backups`, snapshots, migration backups, `.bak-*`) and report/remove older valid copies.
 
 ## Known Issues / Pitfalls
 
@@ -170,8 +170,8 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 ### Wrong snapshot path in older docs
 The pre-update snapshot lives at `<hermes-home>/profiles/<profile>/state-snapshots` (profile-scoped), confirmed by `FILESYSTEM.md` and genie's `snapshots_path` default. The bare path `<hermes-home>/state-snapshots` is a different, usually-empty directory — do not verify against it.
 
-### Decoy-script trap + unreachable prune (CONFIRMED root cause of /root/backup bloat, 2026-07-13)
-When re-investigating disk spikes from backup copies, the **live writer is `backup_all_hermes_data.sh`** (`/root/indigo-repo/scripts/...`, exec'd via the ocas-custodian wrapper), NOT `backup_system.sh`. `backup_system.sh` targets `/root/backups` (plural) and is **unused** — an earlier scan blamed it for "zero retention logic," which was wrong. The live `backup_all_hermes_data.sh` DOES have a prune line (`find /root/backup -mtime +3 -exec rm -rf`), but it sits at **line 114**, *after* the `cp <hermes-home>/state.db` (symlink -> 14G profile DB) at **line 51**, under `set -euo pipefail`. On a near-full disk the `cp` hits ENOSPC, the script aborts, and the prune **never runs** -> partial `active-dbs-*` dirs accumulate (all lacking `state.db` = the ENOSPC-abort signature).
+### Decoy-script trap + unreachable prune (CONFIRMED root cause of <fs-root>/backup bloat, 2026-07-13)
+When re-investigating disk spikes from backup copies, the **live writer is `backup_all_hermes_data.sh`** (`<repo-root>/scripts/...`, exec'd via the ocas-custodian wrapper), NOT `backup_system.sh`. `backup_system.sh` targets `<fs-root>/backups` (plural) and is **unused** — an earlier scan blamed it for "zero retention logic," which was wrong. The live `backup_all_hermes_data.sh` DOES have a prune line (`find <fs-root>/backup -mtime +3 -exec rm -rf`), but it sits at **line 114**, *after* the `cp <hermes-home>/state.db` (symlink -> 14G profile DB) at **line 51**, under `set -euo pipefail`. On a near-full disk the `cp` hits ENOSPC, the script aborts, and the prune **never runs** -> partial `active-dbs-*` dirs accumulate (all lacking `state.db` = the ENOSPC-abort signature).
 
 **FIX APPLIED 2026-07-14 (verify before re-patching):** the prune was moved to BEFORE the 14G cp, a free-space guard (`readlink -f` + `stat -L`, skip copy if `avail < size*1.1`) was added, and `trap cleanup_partial ERR` removes the partial dir on failure. See `references/backup-prune-diskfull-trap.md` STATUS + Verification recipe — run the recipe first; if all three checks pass, the fix is intact and you must NOT re-apply it (doing so would duplicate the guards). The separate TASK-015 (state.db FTS-trigram bloat, VACUUM) is a distinct open task and is NOT covered by this fix.
 
@@ -235,7 +235,7 @@ Any setting not present falls back to the built-in default shown below.
 | File | When to read |
 |---|---|
 | `references/root-audit-and-backup-retention.md` | Root disk-spike investigation, duplicate repo checks, and one-historical-backup retention rule |
-| `references/backup-prune-diskfull-trap.md` | CONFIRMED root cause of /root/backup bloat: live writer is backup_all_hermes_data.sh; prune line unreachable (after 14G state.db cp under set -e); decoy-script trap. **FIX APPLIED 2026-07-14 — top of file has STATUS + a Verification recipe; run it before re-patching.** |
+| `references/backup-prune-diskfull-trap.md` | CONFIRMED root cause of <fs-root>/backup bloat: live writer is backup_all_hermes_data.sh; prune line unreachable (after 14G state.db cp under set -e); decoy-script trap. **FIX APPLIED 2026-07-14 — top of file has STATUS + a Verification recipe; run it before re-patching.** |
 | `references/genie-gotchas.md` | Before first production run or when debugging |
 | `references/operational-notes.md` | Real-world examples and case studies |
 | `references/os-walk-pitfall.md` | Debugging nested directory traversal issues |
@@ -244,7 +244,7 @@ Any setting not present falls back to the built-in default shown below.
 | `references/snapshot-structures.md` | Snapshot format breakdown |
 | `references/state-db-compaction.md` | Tackling state.db bloat |
 | `references/state-db-size-breakdown.md` | State DB composition analysis |
-| `references/disk-growth-patterns.md` | Recurring disk hogs: pre-update snapshots, /root/backup/, browser caches |
+| `references/disk-growth-patterns.md` | Recurring disk hogs: pre-update snapshots, <fs-root>/backup/, browser caches |
 | `references/state-db-retention.md` | State DB retention policy: audit all instances, keep current + one backup, delete oldest first |
 | `references/self-update-genie.md` | Self-update hash comparison procedure |
 | `references/repo-path-conventions.md` | Repo path convention — all remote clones under `projects/github*` |

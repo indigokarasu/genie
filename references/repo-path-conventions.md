@@ -15,7 +15,7 @@ When assessing disk usage, identify repos living outside `projects/github*`:
 
 ```bash
 # Find git repos in /root that should move to projects/github*
-for dir in /root/*/; do
+for dir in <fs-root>/*/; do
   if [ -d "$dir/.git" ]; then
     remote=$(git -C "$dir" remote get-url origin 2>/dev/null)
     if [ -n "$remote" ]; then
@@ -28,8 +28,8 @@ done
 ## Resolution
 
 1. Check if a copy already exists in `projects/github-staging/` or `projects/github-staged/`
-2. If yes → confirm remotes match, then delete the `/root/` copy
-3. If no → `git clone <url> projects/github-staging<reponame> && rm -rf /root/<reponame>`
+2. If yes → confirm remotes match, then delete the `<fs-root>/` copy
+3. If no → `git clone <url> projects/github-staging<reponame> && rm -rf <fs-root>/<reponame>`
 4. Update any scripts/crons referencing the old path
 
 ## Pitfall
@@ -39,5 +39,5 @@ before reporting reclaimable space to the user.
 
 ## Examples
 
-- `indigo-repo`, `BOOK`, `get-md-work` found in `/root/` → deleted (copies already in `github-staging/`)
+- `indigo-repo`, `BOOK`, `get-md-work` found in `<fs-root>/` → deleted (copies already in `github-staging/`)
 - `hermes-agent/`, `.rustup/`, `.linkedin-mcp/` → NOT git remotes (toolchains) — leave alone

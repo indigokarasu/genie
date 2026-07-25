@@ -18,23 +18,23 @@ Every snapshot directory may contain:
 
 ```bash
 # 1. Copy snapshot to repo backup location
-cp -a <hermes-home>/state-snapshots/<snapshot-name> /root/indigo-repo/backups/state-snapshots/
+cp -a <hermes-home>/state-snapshots/<snapshot-name> <repo-root>/backups/state-snapshots/
 
 # 2. Redact auth.json (replace entirely)
 echo '{"redacted": true, "note": "Credentials stripped for backup"}' \
-  > /root/indigo-repo/backups/state-snapshots/<snapshot-name>/auth.json
+  > <repo-root>/backups/state-snapshots/<snapshot-name>/auth.json
 
 # 3. Redact config.yaml (replace with stub — the live config is already at repo root)
 printf '# config.yaml -- REDACTED\n# Credentials stripped for backup. Live config at repo root.\nconfig_version: REDACTED\ncredentials: REDACTED\n' \
-  > /root/indigo-repo/backups/state-snapshots/<snapshot-name>/config.yaml
+  > <repo-root>/backups/state-snapshots/<snapshot-name>/config.yaml
 
 # 4. Redact .env
 echo '# REDACTED - credentials stripped' \
-  > /root/indigo-repo/backups/state-snapshots/<snapshot-name>/.env
+  > <repo-root>/backups/state-snapshots/<snapshot-name>/.env
 
 # 5. Verify no secrets remain (text files only)
 grep -rn 'sk-or\|GOCSPX\|mnfst_\|550801240087\|client_secret' \
-  /root/indigo-repo/backups/state-snapshots/<snapshot-name>/ \
+  <repo-root>/backups/state-snapshots/<snapshot-name>/ \
   --include='*.yaml' --include='*.json' --include='*.env'
 # Should return empty
 

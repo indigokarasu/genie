@@ -127,12 +127,12 @@ DEFAULTS = {
     "cron_output_path": os.path.join(PROFILE_HOME, "cron-output"),
     "snapshots_path": os.path.join(PROFILE_HOME, "state-snapshots"),
     "commons_path": os.path.join(PROFILE_HOME, "commons"),
-    "backups_path": "/root/backups",
-    "backup_paths": ["/root/backup", "/root/backups"],
+    "backups_path": "<fs-root>/backups",
+    "backup_paths": ["<fs-root>/backup", "<fs-root>/backups"],
     "historical_backup_keep_count": 1,
     "tmp_stale_hours": _skill_config("tmp_stale_hours", 24),
     "git_clone_max_age_days": _skill_config("git_clone_max_age_days", 5),
-    "git_clones_path": "/root/projects",
+    "git_clones_path": "<fs-root>/projects",
     "allow_local_state_db_backup": _skill_config("allow_local_state_db_backup", False),
 }
 
@@ -166,8 +166,8 @@ BUILTIN_TARGETS = {
     },
     "backups": {
         "tier": 1, "action": "delete_dirs",
-        "max_age_days": 30, "path": "/root/backups",
-        "pattern": "/root/backups/*/",
+        "max_age_days": 30, "path": "<fs-root>/backups",
+        "pattern": "<fs-root>/backups/*/",
         "description": "Dated backup directories",
     },
     "tmp": {
@@ -178,8 +178,8 @@ BUILTIN_TARGETS = {
     },
     "git-clones": {
         "tier": 1, "action": "delete_git_clones",
-        "max_age_days": 5, "path": "/root/projects",
-        "pattern": "/root/projects/*/",
+        "max_age_days": 5, "path": "<fs-root>/projects",
+        "pattern": "<projects-root>/*/",
         "description": "Inactive git clones (untouched >5d, confirmed remote)",
         "source": "builtin",
     },
@@ -838,14 +838,14 @@ def discover_filesystem():
         except PermissionError:
             pass
 
-    # Check /root/backups
-    if os.path.isdir("/root/backups"):
-        size = du("/root/backups")
+    # Check <fs-root>/backups
+    if os.path.isdir("<fs-root>/backups"):
+        size = du("<fs-root>/backups")
         if size > 10 * 1024 * 1024:  # > 10MB
             discovered["backups"] = {
                 "tier": 1, "action": "delete_dirs",
-                "max_age_days": 30, "path": "/root/backups",
-                "pattern": "/root/backups/*/",
+                "max_age_days": 30, "path": "<fs-root>/backups",
+                "pattern": "<fs-root>/backups/*/",
                 "description": f"Backup directories — {fmt(size)}",
                 "source": "discovered",
             }
@@ -890,7 +890,7 @@ def discover_filesystem():
             }
             break
 
-    # Check for large directories at /root/ that aren't in known zones
+    # Check for large directories at <fs-root>/ that aren't in known zones
     if os.path.isdir("/root"):
         known_zones = {"projects", "backups", "trash", "hermes-agent", "hermes-ecosystem"}
         try:
@@ -905,7 +905,7 @@ def discover_filesystem():
                     discovered[f"root-{entry}"] = {
                         "tier": 3, "action": "analyze_only",
                         "path": full,
-                        "description": f"Unknown /root/ directory — {fmt(size)} (review manually)",
+                        "description": f"Unknown <fs-root>/ directory — {fmt(size)} (review manually)",
                         "source": "discovered_unexpected",
                     }
         except PermissionError:
@@ -1375,7 +1375,7 @@ def assess(cfg, targets=None):
         lines.append(f"/tmp: {fmt(tmp_size)} total, {old_tmp} files/dirs older than {cfg.get('tmp_stale_hours', 24)}h")
 
     # Git clones
-    gcp = cfg.get("git_clones_path", "/root/projects")
+    gcp = cfg.get("git_clones_path", "<fs-root>/projects")
     if os.path.isdir(gcp):
         old_clones = 0
         recent_clones = 0
@@ -1469,7 +1469,7 @@ def clean(cfg):
         results.append(clean_tmp("/tmp", cfg["tmp_stale_hours"], cfg["dry_run"]))
 
     # Git clones (inactive, confirmed remote)
-    git_clones_path = cfg.get("git_clones_path", "/root/projects")
+    git_clones_path = cfg.get("git_clones_path", "<fs-root>/projects")
     if os.path.isdir(git_clones_path):
         results.append(clean_git_clones(git_clones_path, cfg["git_clone_max_age_days"], cfg["dry_run"]))
 

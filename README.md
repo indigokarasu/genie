@@ -21,8 +21,8 @@ If true, only report — don't delete/compress
 ## 🔧 Commands
 
 - `/root` needs a safe audit/classification pass
-- `/root/backup/*`
-- `/root/backups/*`
+- `<fs-root>/backup/*`
+- `<fs-root>/backups/*`
 - `<hermes-home>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-home>/state-snapshots` is a different, usually-empty path)
 - `<hermes-home>/migrations/*/backups/*`
 - `<hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)

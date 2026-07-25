@@ -15,8 +15,8 @@ Only one historical backup may remain on the VPS at a time, in addition to curre
 
 Common historical-backup paths:
 
-- `/root/backup/*`
-- `/root/backups/*`
+- `<fs-root>/backup/*`
+- `<fs-root>/backups/*`
 - `<hermes-home>/state-snapshots/*`
 - `<hermes-home>/migrations/*/backups/*`
 - profile DB `.bak-*` files under `<hermes-home>/profiles/*/commons/db/`
@@ -44,7 +44,7 @@ find / -xdev -type f -size +100M -mtime -3 -printf '%TY-%Tm-%Td %TH:%TM %s %p\n'
 Also inspect likely large subtrees:
 
 ```bash
-du -xhd2 <hermes-home> /root/projects /root/backup /root/backups /var 2>/dev/null | sort -hr | head -100
+du -xhd2 <hermes-home> <fs-root>/projects <fs-root>/backup <fs-root>/backups /var 2>/dev/null | sort -hr | head -100
 ```
 
 ## Phase 2 — Backup retention audit
@@ -52,7 +52,7 @@ du -xhd2 <hermes-home> /root/projects /root/backup /root/backups /var 2>/dev/nul
 Find all historical backup candidates and enforce the one-backup rule.
 
 ```bash
-find /root/backup /root/backups <hermes-home>/state-snapshots <hermes-home>/migrations -xdev -mindepth 1 -maxdepth 4 \
+find <fs-root>/backup <fs-root>/backups <hermes-home>/state-snapshots <hermes-home>/migrations -xdev -mindepth 1 -maxdepth 4 \
   \( -type f -o -type d \) -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null | sort -r | head -200
 
 find /root -xdev \( -name 'state.db*' -o -name 'chronicle.db*' -o -name 'chroma.sqlite3*' -o -name '*.bak-*' \) \
@@ -73,7 +73,7 @@ If there are multiple historical backups:
 Git repos and `node_modules` often explain multi-GB drift.
 
 ```bash
-du -sh /root/*/ <projects-root>/*/ <projects-root>/github-staging/*/ 2>/dev/null | sort -hr | head -80
+du -sh <fs-root>/*/ <projects-root>/*/ <projects-root>/github-staging/*/ 2>/dev/null | sort -hr | head -80
 ```
 
 For suspicious pairs, compare remotes and HEADs:
@@ -94,12 +94,12 @@ Same remote + same HEAD = duplicate candidate. Prefer keeping the newer active p
 Do not blanket-grep all of `.hermes`; target specific reference sources.
 
 ```bash
-grep -rl '/root/' /etc/systemd/system/ 2>/dev/null | grep -v hermes || true
-ps aux | grep '/root/' | grep -v grep | grep -v '.hermes' || true
-grep -n '/root/' /root/.bashrc /root/.profile /root/.zshrc 2>/dev/null | grep -v '#' || true
+grep -rl '<fs-root>/' /etc/systemd/system/ 2>/dev/null | grep -v hermes || true
+ps aux | grep '<fs-root>/' | grep -v grep | grep -v '.hermes' || true
+grep -n '<fs-root>/' <fs-root>/.bashrc <fs-root>/.profile <fs-root>/.zshrc 2>/dev/null | grep -v '#' || true
 crontab -l 2>/dev/null || true
 hermes cron list 2>/dev/null || true
-grep '/root/' <hermes-home>/config.yaml <hermes-home>/profiles/*/config.yaml 2>/dev/null || true
+grep '<fs-root>/' <hermes-home>/config.yaml <hermes-home>/profiles/*/config.yaml 2>/dev/null || true
 ```
 
 For loose Python files, check actual import statements, not substring matches.
@@ -115,7 +115,7 @@ For loose Python files, check actual import statements, not substring matches.
 When uncertain, move to a dated trash directory first:
 
 ```bash
-TRASH="/root/.trash/$(date +%Y-%m-%d)"
+TRASH="<fs-root>/.trash/$(date +%Y-%m-%d)"
 mkdir -p "$TRASH"
 mv /path/to/candidate "$TRASH/"
 ```

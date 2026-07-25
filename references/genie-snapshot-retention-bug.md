@@ -40,7 +40,7 @@ snapshot survived.** Verify the directory directly.
 - `transactions.db` = raw Plaid ingestion/source DB that Styx enriches.
   Tables: `accounts`, `plaid_items`, `sync_cursor`, `transactions`.
   Live path: `<hermes-home>/data/transactions.db` (`TXNS_DB` in
-  `styx_chronicle_sync.py`). A `/root/backups/transactions.db` is only a
+  `styx_chronicle_sync.py`). A `<fs-root>/backups/transactions.db` is only a
   *backup copy* of this source.
 Do not mistake a retained `transactions.db` backup for the Styx DB, and do not
 assume keeping it satisfies "back up Styx."

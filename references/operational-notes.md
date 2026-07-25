@@ -99,7 +99,7 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 
 ### Actions Taken
 1. Genie `--clean`: freed 739 MB (uv cache 291MB + npm cache 448MB + tmp 135KB)
-2. Manual: removed `/root/.cache/camoufox/` (1.4 GB — not covered by genie)
+2. Manual: removed `<fs-root>/.cache/camoufox/` (1.4 GB — not covered by genie)
 3. Disk after: 83% (80 GB used, 17 GB free)
 
 ### Gateway Health Check (parallel task)
@@ -111,12 +111,12 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 - Do NOT trust `systemctl --user is-active` alone for gateway health
 
 ### Key Learnings
-1. **camoufox cache is a new large consumer**: stealth browser profile cache at `/root/.cache/camoufox/` was 1.4 GB. Not covered by genie's built-in cache rules. Safe to `rm -rf` (rebuildable on next browser use).
+1. **camoufox cache is a new large consumer**: stealth browser profile cache at `<fs-root>/.cache/camoufox/` was 1.4 GB. Not covered by genie's built-in cache rules. Safe to `rm -rf` (rebuildable on next browser use).
 2. **Gateway health requires multi-signal check**: systemd state can be stale. Always cross-check process existence + profile-specific gateway log for Telegram connection status.
 3. **Script path gotcha confirmed**: The skill's documented path (`<hermes-home>/profiles/indigo/skills/genie/scripts/genie.py`) does NOT match reality (`ocas-genie/` prefix). Patched in this session.
 
 ### Remaining Concerns
-- `/root/backup/`: 9.4 GB single directory from June 2026-06-24 (chroma.sqlite3 + chronicle.lbug) — manual review needed
+- `<fs-root>/backup/`: 9.4 GB single directory from June 2026-06-24 (chroma.sqlite3 + chronicle.lbug) — manual review needed
 - `/tmp/`: 150 MB stale files (cleanup blocked by user consent gate)
 - hermes images/cache: small, blocked by user consent gate
 
@@ -160,7 +160,7 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 
 5. **Chrome temp dirs accumulate in /tmp/**: Multiple `com.google.Chrome.*` directories from browser automation sessions. Safe to delete when Chrome is not running. Check with `pgrep -a chrome` first.
 
-6. **braun-build-sources is a build cache, not a backup**: Contains cloned GitHub repos used during skill installation. Safe to delete once skills are installed. Check `du -sh /root/backups/braun-*` to identify.
+6. **braun-build-sources is a build cache, not a backup**: Contains cloned GitHub repos used during skill installation. Safe to delete once skills are installed. Check `du -sh <fs-root>/backups/braun-*` to identify.
 
 ### Remaining Concerns
 - indigo profile: 25 GB (commons/db/chronicle/ at 6.9 GB is the biggest piece)
