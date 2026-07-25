@@ -42,14 +42,22 @@ State-only backup, MB to sub-GB scale:
 
 List snapshots with size and file count:
 ```
+<<<<<<< Updated upstream
 for d in <hermes-home>/state-snapshots/*/; do
+=======
+for d in ~/.hermes/state-snapshots/*/; do
+>>>>>>> Stashed changes
   echo "$(basename "$d") | $(du -sh "$d" | cut -f1) | $(find "$d" -type f | wc -l) files"
 done
 ```
 
 Check access times for deletion decisions:
 ```
+<<<<<<< Updated upstream
 for d in <hermes-home>/state-snapshots/*/; do
+=======
+for d in ~/.hermes/state-snapshots/*/; do
+>>>>>>> Stashed changes
   name=$(basename "$d")
   dir_atime=$(stat -c '%x' "$d")
   newest=$(find "$d" -type f -printf '%A+' | sort | tail -1)
@@ -59,7 +67,11 @@ done
 
 Inspect structure (9-file vs 5-file):
 ```
+<<<<<<< Updated upstream
 for d in <hermes-home>/state-snapshots/*/; do
+=======
+for d in ~/.hermes/state-snapshots/*/; do
+>>>>>>> Stashed changes
   echo "=== $(basename "$d") ==="
   ls -la "$d"
 done

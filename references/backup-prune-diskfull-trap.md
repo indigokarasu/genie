@@ -1,15 +1,24 @@
 # Backup Prune-Order / Disk-Full Trap (CONFIRMED root cause of <fs-root>/backup bloat)
 
 ## STATUS: FIX APPLIED (2026-07-14)
+<<<<<<< Updated upstream
 The three root-cause guards are now present in the canonical live writer `<repo-root>/scripts/backup_all_hermes_data.sh` (applied by finch:work, verified 2026-07-14T12:33). The bug is dormant and should not refire.
 - Prune (`find <fs-root>/backup -mtime +3`) moved to ~line 18, **before** the 14G `cp <hermes-home>/state.db` at ~line 67.
+=======
+The three root-cause guards are now present in the canonical live writer `<fs-root>/indigo-repo/scripts/backup_all_hermes_data.sh` (applied by finch:work, verified 2026-07-14T12:33). The bug is dormant and should not refire.
+- Prune (`find <fs-root>/backup -mtime +3`) moved to ~line 18, **before** the 14G `cp ~/.hermes/state.db` at ~line 67.
+>>>>>>> Stashed changes
 - Free-space guard: `readlink -f` resolves the symlink to the real ~14G target, `stat -L` sizes it, copy skipped (with WARN) if `avail < size*1.1`.
 - `trap cleanup_partial ERR` removes the partial `$BACKUP_DIR` on any failure.
 The one-time destructive prune (4 of 5 `<fs-root>/backup` dirs) was also completed in an earlier run; `<fs-root>/backup` now holds 1 dir (3.2G). The separate TASK-015 (state.db FTS-trigram bloat, VACUUM/retention) remains open and is NOT addressed by this fix.
 
 ## Verification recipe (confirm guards are present — do NOT re-patch blindly)
 ```bash
+<<<<<<< Updated upstream
 SCRIPT=<repo-root>/scripts/backup_all_hermes_data.sh
+=======
+SCRIPT=<fs-root>/indigo-repo/scripts/backup_all_hermes_data.sh
+>>>>>>> Stashed changes
 bash -n "$SCRIPT" && echo 'SYNTAX OK'
 # (1) prune must run BEFORE state.db cp under set -e
 awk '/Early prune of stale local backups/{p=NR} /cp \/root\/.hermes\/state.db/{c=NR} END{print "prune~"p" cp~"c; if(p>0&&c>0&&p<c)print "PASS: prune before cp"; else print "FAIL"}' "$SCRIPT"
@@ -23,10 +32,17 @@ If all three pass, the fix is intact — do not re-apply.
 ## The bug
 The live Hermes backup writer is:
 
+<<<<<<< Updated upstream
 - Canonical: `<repo-root>/scripts/backup_all_hermes_data.sh`
 - Wrappers that exec it:
   - `<hermes-home>/profiles/indigo/skills/ocas-custodian/scripts/backup_all_hermes_data.sh`
   - `<hermes-home>/profiles/indigo/scripts/backup_all_hermes_data.sh` (3-line)
+=======
+- Canonical: `<fs-root>/indigo-repo/scripts/backup_all_hermes_data.sh`
+- Wrappers that exec it:
+  - `~/.hermes/profiles/indigo/skills/ocas-custodian/scripts/backup_all_hermes_data.sh`
+  - `~/.hermes/profiles/indigo/scripts/backup_all_hermes_data.sh` (3-line)
+>>>>>>> Stashed changes
 
 Cron job: **"Backup Hermes Sessions to GitHub"**, schedule `0 */6 * * *` (no retry config).
 
@@ -34,7 +50,11 @@ Key structure (canonical script):
 - `set -euo pipefail`
 - `BACKUP_DIR="<fs-root>/backup/$TIMESTAMP"` (line 9), `mkdir -p` (line 12)
 - Copies small DBs (chronicle.lbug etc.)
+<<<<<<< Updated upstream
 - `cp <hermes-home>/state.db "$BACKUP_DIR/state.db"` at **line 51** — `state.db` is a **symlink -> `<hermes-home>/profiles/indigo/state.db`, ~14G**
+=======
+- `cp ~/.hermes/state.db "$BACKUP_DIR/state.db"` at **line 51** — `state.db` is a **symlink -> `~/.hermes/profiles/indigo/state.db`, ~14G**
+>>>>>>> Stashed changes
 - GitHub push (lines ~80-112)
 - Prune at **line 114**: `find <fs-root>/backup -maxdepth 1 -mindepth 1 -type d -mtime +3 -exec rm -rf {} + 2>/dev/null || true`
 
@@ -46,9 +66,15 @@ The prune keeps 3 days (`-mtime +3`), so even when it DOES run it removes nothin
 All `<fs-root>/backup/active-dbs-*` dirs contain only `chronicle.db` and **NO `state.db`**. That missing 14G file is the proof of ENOSPC abort — the small copies succeeded, the large one failed, script died before prune. In the observed case: 5 dirs (~15GB), 3 created within 4 minutes (19:19 / 19:21 / 19:23) = failed cron refires.
 
 ## Decoy-script trap (do NOT repeat this mistake)
+<<<<<<< Updated upstream
 Earlier scans concluded "backup scripts have ZERO retention logic" — WRONG. They inspected `backup_system.sh` (`<hermes-home>/profiles/indigo/scripts/backup_system.sh` and the ocas-custodian copy), which targets `<fs-root>/backups` (plural) and is **UNUSED**. The live writer is `backup_all_hermes_data.sh` (singular `<fs-root>/backup`).
 
 **Re-investigation rule:** to find the live writer, follow the real chain — read `jobs.json` `command`/`script_path`, grep `<hermes-home>/cron/output/<id>/*.md` logs for the job name, or follow `exec` chains in wrappers. Do NOT conclude root cause from a plausibly-named sibling script. Also confirm which directory actually receives writes (`<fs-root>/backup` here, not `<fs-root>/backups`). And check whether a retention line is *reachable* — a prune after a large/failing `cp` under `set -e` is effectively dead code on a full disk.
+=======
+Earlier scans concluded "backup scripts have ZERO retention logic" — WRONG. They inspected `backup_system.sh` (`~/.hermes/profiles/indigo/scripts/backup_system.sh` and the ocas-custodian copy), which targets `<backups-root>` (plural) and is **UNUSED**. The live writer is `backup_all_hermes_data.sh` (singular `<fs-root>/backup`).
+
+**Re-investigation rule:** to find the live writer, follow the real chain — read `jobs.json` `command`/`script_path`, grep `~/.hermes/cron/output/<id>/*.md` logs for the job name, or follow `exec` chains in wrappers. Do NOT conclude root cause from a plausibly-named sibling script. Also confirm which directory actually receives writes (`<fs-root>/backup` here, not `<backups-root>`). And check whether a retention line is *reachable* — a prune after a large/failing `cp` under `set -e` is effectively dead code on a full disk.
+>>>>>>> Stashed changes
 
 ## Fix (APPLIED 2026-07-14 — see STATUS above; historical recipe kept for reference)
 In `backup_all_hermes_data.sh`:
