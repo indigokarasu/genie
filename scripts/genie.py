@@ -1228,6 +1228,19 @@ def analyze_state_db(db_path):
         c.execute("PRAGMA page_size")
         page_size = c.fetchone()[0]
         result["estimated_size"] = page_count * page_size
+        # Free-list bloat: dead pages VACUUM would reclaim (read-only, instant)
+        c.execute("PRAGMA freelist_count")
+        freelist = c.fetchone()[0]
+        result["freelist_count"] = freelist
+        result["live_bytes"] = (page_count - freelist) * page_size
+        result["bloat_bytes"] = freelist * page_size
+        result["bloat_pct"] = round(100.0 * freelist / page_count, 1) if page_count else 0
+        # VACUUM feasibility: classic VACUUM duplicates the live data inline,
+        # so it needs free disk ~= live_bytes (the compacted file size) on top
+        # of the still-present original. Flag if it won't fit.
+        _, _, free, _ = disk_usage()
+        result["vacuum_needs_bytes"] = result["live_bytes"]
+        result["vacuum_feasible"] = result["live_bytes"] < free
 
         c.execute("SELECT name FROM sqlite_master WHERE type='table'")
         for (table_name,) in c.fetchall():
@@ -1428,6 +1441,18 @@ def assess(cfg, targets=None):
         db_size = os.path.getsize(dbp)
         wal_size = os.path.getsize(dbp + "-wal") if os.path.exists(dbp + "-wal") else 0
         lines.append(f"State DB: {fmt(db_size)} (+ {fmt(wal_size)} WAL)")
+        # Pragma bloat analysis (read-only, instant) — runs on the default
+        # assess/clean/discover pass so VACUUM feasibility is always visible.
+        dbr = analyze_state_db(dbp)
+        if dbr.get("estimated_size"):
+            lines.append(
+                f"  → live data {fmt(dbr['live_bytes'])}, free-list bloat "
+                f"{fmt(dbr['bloat_bytes'])} ({dbr['bloat_pct']}%)")
+            verdict = "SAFE to VACUUM" if dbr["vacuum_feasible"] \
+                else "VACUUM would NOT fit free space — free more first"
+            lines.append(
+                f"  → VACUUM would reclaim {fmt(dbr['bloat_bytes'])}, "
+                f"needs ~{fmt(dbr['vacuum_needs_bytes'])} free: {verdict}")
 
     # Discovered targets (from FILESYSTEM.md or --discover)
     if targets:
