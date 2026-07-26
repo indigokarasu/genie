@@ -4,11 +4,7 @@ Common disk hogs on the agent's VPS that cause rapid growth after updates or nor
 
 ## Pre-Update Snapshots (state-snapshots/)
 
-<<<<<<< Updated upstream
 After `hermes update`, a full pre-update snapshot is created in `<hermes-home>/state-snapshots/YYYYMMDD-HHMMSS-pre-update/`. The largest file is always `state.db` — a full copy of the live state database.
-=======
-After `hermes update`, a full pre-update snapshot is created in `~/.hermes/state-snapshots/YYYYMMDD-HHMMSS-pre-update/`. The largest file is always `state.db` — a full copy of the live state database.
->>>>>>> Stashed changes
 
 **the agent's state.db is 11 GB** (session history, FTS index). A single snapshot = 11 GB on disk.
 
@@ -17,13 +13,8 @@ After `hermes update`, a full pre-update snapshot is created in `~/.hermes/state
 **Cleanup**: safe to delete once the post-update gateway is confirmed healthy (usually 24h after update). Keep only the most recent.
 
 ```bash
-<<<<<<< Updated upstream
 ls -la <hermes-home>/state-snapshots/
 rm -rf <hermes-home>/state-snapshots/20260620-XXXXXX-pre-update/  # old one
-=======
-ls -la ~/.hermes/state-snapshots/
-rm -rf ~/.hermes/state-snapshots/20260620-XXXXXX-pre-update/  # old one
->>>>>>> Stashed changes
 ```
 
 ## <fs-root>/backup/
@@ -38,24 +29,15 @@ du -sh <fs-root>/backup/*/ | sort -rh
 
 ## Migration Backups (migrations/)
 
-<<<<<<< Updated upstream
 `<hermes-home>/migrations/` holds backup copies of databases created during migration scripts (e.g., peopledb takeout enrichment). The largest is typically a chronicle snapshot matching the live DB size.
-=======
-`~/.hermes/migrations/` holds backup copies of databases created during migration scripts (e.g., peopledb takeout enrichment). The largest is typically a chronicle snapshot matching the live DB size.
->>>>>>> Stashed changes
 
 **June 2026 example**: `migrations/peopledb/backups/chronicle.2026-06-28.db` was 6.1 GB — a full copy of chronicle.db from the takeout import. The migration completed successfully, making this backup stale.
 
 **Cleanup**: safe to delete once the migration that created them is confirmed complete. Check for a `CHECKPOINT.md` or similar status marker in the migration directory.
 
 ```bash
-<<<<<<< Updated upstream
 du -sh <hermes-home>/migrations/*/backups/ 2>/dev/null
 cat <hermes-home>/migrations/*/CHECKPOINT.md
-=======
-du -sh ~/.hermes/migrations/*/backups/ 2>/dev/null
-cat ~/.hermes/migrations/*/CHECKPOINT.md
->>>>>>> Stashed changes
 ```
 
 ## Pre-Migration Database Backups (`.bak-*` files)
@@ -68,15 +50,9 @@ Migration scripts sometimes create `.bak-*` copies of live databases before modi
 
 ```bash
 # Find all .bak files in profiles
-<<<<<<< Updated upstream
 find <hermes-home>/profiles/ -name "*.bak*" -ls
 # Compare timestamps
 ls -lh <hermes-home>/profiles/indigo/commons/db/chronicle/
-=======
-find ~/.hermes/profiles/ -name "*.bak*" -ls
-# Compare timestamps
-ls -lh ~/.hermes/profiles/indigo/commons/db/chronicle/
->>>>>>> Stashed changes
 ```
 
 ## /tmp Stale Extracts
@@ -104,11 +80,7 @@ rm -rf /tmp/camoufox-*
 
 ## Symlink Indirection
 
-<<<<<<< Updated upstream
 `<hermes-home>/state.db` is a symlink to the active profile's DB (currently `→ <hermes-home>/profiles/indigo/state.db`). When auditing "how many state.db files exist", resolve symlinks first — `find / -name state.db` may report the same file twice (once as symlink, once as target). Use `readlink -f` and `ls -li` (inode check) to deduplicate.
-=======
-`~/.hermes/state.db` is a symlink to the active profile's DB (currently `→ ~/.hermes/profiles/indigo/state.db`). When auditing "how many state.db files exist", resolve symlinks first — `find / -name state.db` may report the same file twice (once as symlink, once as target). Use `readlink -f` and `ls -li` (inode check) to deduplicate.
->>>>>>> Stashed changes
 
 To identify what grew since last check:
 
@@ -117,17 +89,10 @@ To identify what grew since last check:
 du -sh <fs-root>/*/ <fs-root>/.*/ 2>/dev/null | sort -rh | head -20
 
 # Deep dive into .hermes
-<<<<<<< Updated upstream
 du -sh <hermes-home>/*/ <hermes-home>/profiles/*/ 2>/dev/null | sort -rh
 
 # Inside a specific profile
 du -sh <hermes-home>/profiles/indigo/*/ 2>/dev/null | sort -rh
-=======
-du -sh ~/.hermes/*/ ~/.hermes/profiles/*/ 2>/dev/null | sort -rh
-
-# Inside a specific profile
-du -sh ~/.hermes/profiles/indigo/*/ 2>/dev/null | sort -rh
->>>>>>> Stashed changes
 ```
 
 **the agent's typical breakdown** (June 2026):

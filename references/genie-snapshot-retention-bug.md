@@ -23,24 +23,14 @@ snapshot survived.** Verify the directory directly.
 
 ## Verification recipe (run AFTER every --clean)
 1. Snapshot dir must be non-empty — check the PROFILE-SCOPED path:
-<<<<<<< Updated upstream
    `ls -la <hermes-home>/profiles/<profile>/state-snapshots/`
    (for indigo the profile is `indigo`). The bare `<hermes-home>/state-snapshots`
-=======
-   `ls -la ~/.hermes/profiles/<profile>/state-snapshots/`
-   (for indigo the profile is `indigo`). The bare `~/.hermes/state-snapshots`
->>>>>>> Stashed changes
    is a different, usually-empty directory — do NOT verify against it.
 2. Find any dir >3 GB to confirm a large snapshot wasn't silently dropped:
    `find /root -maxdepth 4 -type d -exec du -sh {} + 2>/dev/null | awk '$1 ~ /G/ && $1+0 >= 3'`
 3. Live DB integrity (resolve symlinks first):
-<<<<<<< Updated upstream
    `sqlite3 <hermes-home>/data/styx.db "PRAGMA integrity_check;"`          # enriched Styx
    `sqlite3 <hermes-home>/data/transactions.db "PRAGMA integrity_check;"`  # live Plaid source
-=======
-   `sqlite3 ~/.hermes/data/styx.db "PRAGMA integrity_check;"`          # enriched Styx
-   `sqlite3 ~/.hermes/data/transactions.db "PRAGMA integrity_check;"`  # live Plaid source
->>>>>>> Stashed changes
 4. Confirm live DBs still present (not just backups):
    `find /root -iname 'transactions.db'` ; `find /root -iname 'styx.db'`
 
@@ -49,13 +39,8 @@ snapshot survived.** Verify the directory directly.
   `enrichment_runs`, `receipt_line_items`, `merchant_opaque_ids`.
 - `transactions.db` = raw Plaid ingestion/source DB that Styx enriches.
   Tables: `accounts`, `plaid_items`, `sync_cursor`, `transactions`.
-<<<<<<< Updated upstream
   Live path: `<hermes-home>/data/transactions.db` (`TXNS_DB` in
   `styx_chronicle_sync.py`). A `<fs-root>/backups/transactions.db` is only a
-=======
-  Live path: `~/.hermes/data/transactions.db` (`TXNS_DB` in
-  `styx_chronicle_sync.py`). A `<backups-root>/transactions.db` is only a
->>>>>>> Stashed changes
   *backup copy* of this source.
 Do not mistake a retained `transactions.db` backup for the Styx DB, and do not
 assume keeping it satisfies "back up Styx."
@@ -63,10 +48,5 @@ assume keeping it satisfies "back up Styx."
 ## Audit-trail limitation
 genie prints only aggregate totals (e.g. "backup_retention: freed 26.6 GB / 27
 files"). Deleted paths are NOT logged and files are unrecoverable (no git/LFS
-<<<<<<< Updated upstream
 on `<hermes-home>`). Capture `ls -la` of every backup class BEFORE `--clean`
 if you need to answer "what was deleted" later.
-=======
-on `~/.hermes`). Capture `ls -la` of every backup class BEFORE `--clean`
-if you need to answer "what was deleted" later.
->>>>>>> Stashed changes

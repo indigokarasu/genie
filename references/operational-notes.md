@@ -34,13 +34,8 @@
 Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timestamp jobs as workaround.
 
 ## Script Locations
-<<<<<<< Updated upstream
 - Production: <hermes-home>/scripts/genie.py
 - Skill-bundled: <hermes-home>/skills/ocas-genie/scripts/genie.py
-=======
-- Production: ~/.hermes/scripts/genie.py
-- Skill-bundled: ~/.hermes/skills/ocas-genie/scripts/genie.py
->>>>>>> Stashed changes
 
 ## Cron Job
 - Job ID: e3adc3e31181
@@ -112,21 +107,13 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 - BUT process was actually running (PID 1069920, up 3h51m, RSS ~480MB)
 - Telegram was connected (polling mode, 60 commands, 158 channel targets)
 - Root cause: systemd lost tracking of the process (started with `--profile indigo` but systemd service name mismatch)
-<<<<<<< Updated upstream
 - **Correct health check**: verify process via `pgrep -f "hermes.*gateway"` AND check profile-specific log at `<hermes-home>/profiles/indigo/logs/gateway.log` for "✓ telegram connected"
-=======
-- **Correct health check**: verify process via `pgrep -f "hermes.*gateway"` AND check profile-specific log at `~/.hermes/profiles/indigo/logs/gateway.log` for "✓ telegram connected"
->>>>>>> Stashed changes
 - Do NOT trust `systemctl --user is-active` alone for gateway health
 
 ### Key Learnings
 1. **camoufox cache is a new large consumer**: stealth browser profile cache at `<fs-root>/.cache/camoufox/` was 1.4 GB. Not covered by genie's built-in cache rules. Safe to `rm -rf` (rebuildable on next browser use).
 2. **Gateway health requires multi-signal check**: systemd state can be stale. Always cross-check process existence + profile-specific gateway log for Telegram connection status.
-<<<<<<< Updated upstream
 3. **Script path gotcha confirmed**: The skill's documented path (`<hermes-home>/profiles/indigo/skills/genie/scripts/genie.py`) does NOT match reality (`ocas-genie/` prefix). Patched in this session.
-=======
-3. **Script path gotcha confirmed**: The skill's documented path (`~/.hermes/profiles/indigo/skills/genie/scripts/genie.py`) does NOT match reality (`ocas-genie/` prefix). Patched in this session.
->>>>>>> Stashed changes
 
 ### Remaining Concerns
 - `<fs-root>/backup/`: 9.4 GB single directory from June 2026-06-24 (chroma.sqlite3 + chronicle.lbug) — manual review needed
@@ -173,11 +160,7 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 
 5. **Chrome temp dirs accumulate in /tmp/**: Multiple `com.google.Chrome.*` directories from browser automation sessions. Safe to delete when Chrome is not running. Check with `pgrep -a chrome` first.
 
-<<<<<<< Updated upstream
-6. **braun-build-sources is a build cache, not a backup**: Contains cloned GitHub repos used during skill installation. Safe to delete once skills are installed. Check `du -sh <fs-root>/backups/braun-*` to identify.
-=======
 6. **braun-build-sources is a build cache, not a backup**: Contains cloned GitHub repos used during skill installation. Safe to delete once skills are installed. Check `du -sh <backups-root>/braun-*` to identify.
->>>>>>> Stashed changes
 
 ### Remaining Concerns
 - indigo profile: 25 GB (commons/db/chronicle/ at 6.9 GB is the biggest piece)

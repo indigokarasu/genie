@@ -40,8 +40,4 @@ before reporting reclaimable space to the user.
 ## Examples
 
 - `indigo-repo`, `BOOK`, `get-md-work` found in `<fs-root>/` → deleted (copies already in `github-staging/`)
-<<<<<<< Updated upstream
 - `hermes-agent/`, `.rustup/`, `.linkedin-mcp/` → NOT git remotes (toolchains) — leave alone
-=======
-- `hermes-agent/`, `.rustup/`, `.linkedin-mcp/` → NOT git remotes (toolchains) — leave alone
->>>>>>> Stashed changes
