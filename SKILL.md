@@ -70,7 +70,6 @@ Configuration lives in `config.yaml` under `skills.config.genie.*` (see Configur
 
 ```bash
 # Assess disk usage and identify cleanup targets
-<<<<<<< Updated upstream
 python3 <hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py --assess
 
 # Execute cleanup (Tier 1 + Tier 2)
@@ -81,18 +80,6 @@ python3 <hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py --clean
 
 # Map filesystem and generate FILESYSTEM.md manifest
 python3 <hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py --discover
-=======
-python3 ~/.hermes/profiles/indigo/skills/ocas-genie/scripts/genie.py --assess
-
-# Execute cleanup (Tier 1 + Tier 2)
-python3 ~/.hermes/profiles/indigo/skills/ocas-genie/scripts/genie.py --clean
-
-# Dry run — preview without deleting
-python3 ~/.hermes/profiles/indigo/skills/ocas-genie/scripts/genie.py --clean --dry-run
-
-# Map filesystem and generate FILESYSTEM.md manifest
-python3 ~/.hermes/profiles/indigo/skills/ocas-genie/scripts/genie.py --discover
->>>>>>> Stashed changes
 ```
 
 For large file counts (>2,000), run in background: `terminal(background=True, notify_on_complete=True)`.
@@ -115,17 +102,10 @@ The VPS should keep **only one historical backup at a time**, plus current live 
 
 Historical backup candidates include:
 - `<fs-root>/backup/*`
-<<<<<<< Updated upstream
 - `<fs-root>/backups/*`
 - `<hermes-home>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-home>/state-snapshots` is a different, usually-empty path)
 - `<hermes-home>/migrations/*/backups/*`
 - profile DB `.bak-*` files under `<hermes-home>/profiles/*/commons/db/`
-=======
-- `<backups-root>/*`
-- `~/.hermes/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `~/.hermes/state-snapshots` is a different, usually-empty path)
-- `~/.hermes/migrations/*/backups/*`
-- profile DB `.bak-*` files under `~/.hermes/profiles/*/commons/db/`
->>>>>>> Stashed changes
 
 Default behavior:
 1. local full `state.db` backup copies are invalid unless explicitly requested
@@ -140,15 +120,9 @@ For the full audit workflow, see `references/root-audit-and-backup-retention.md`
 ## Procedure
 
 1. **Locate the script** — check these paths in order:
-<<<<<<< Updated upstream
    - `<hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
    - `<hermes-home>/profiles/indigo/scripts/genie.py` (profile scripts dir — alternate location)
    - `<hermes-home>/skills/ocas-genie/scripts/genie.py` (skill-bundled)
-=======
-   - `~/.hermes/profiles/indigo/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
-   - `~/.hermes/profiles/indigo/scripts/genie.py` (profile scripts dir — alternate location)
-   - `~/.hermes/skills/ocas-genie/scripts/genie.py` (skill-bundled)
->>>>>>> Stashed changes
    - Use absolute paths only — never `~` in cron context
    - **Gotcha**: the skill folder is `ocas-genie/`, not `genie/`. A literal read of the old path will fail with ENOENT.
 
@@ -162,15 +136,9 @@ For the full audit workflow, see `references/root-audit-and-backup-retention.md`
 
 Some large disk consumers require an audit pass before cleanup because they may be live data, backups, or duplicate worktrees. Use `references/root-audit-and-backup-retention.md` for the full procedure.
 
-<<<<<<< Updated upstream
 1. **Manual backups** (`<fs-root>/backup/`, `<fs-root>/backups/`) — enforce one historical backup total on the VPS. Keep newest valid backup; older backups are reclaimable.
 2. **Pre-update snapshots** (`<hermes-home>/profiles/<profile>/state-snapshots/`) — count as historical backups. Keep only the newest valid one once the post-update gateway is confirmed healthy. **CAUTION:** `backup_retention` may delete this snapshot despite the preservation rule (see Known Issues) — verify it survived after every `--clean`.
 3. **Migration backups** (`<hermes-home>/migrations/*/backups/`) — count as historical backups. Keep only if they are the newest/only valid historical backup.
-=======
-1. **Manual backups** (`<fs-root>/backup/`, `<backups-root>/`) — enforce one historical backup total on the VPS. Keep newest valid backup; older backups are reclaimable.
-2. **Pre-update snapshots** (`~/.hermes/profiles/<profile>/state-snapshots/`) — count as historical backups. Keep only the newest valid one once the post-update gateway is confirmed healthy. **CAUTION:** `backup_retention` may delete this snapshot despite the preservation rule (see Known Issues) — verify it survived after every `--clean`.
-3. **Migration backups** (`~/.hermes/migrations/*/backups/`) — count as historical backups. Keep only if they are the newest/only valid historical backup.
->>>>>>> Stashed changes
 4. **Pre-migration `.bak-*` files** (`profiles/*/commons/db/*/.bak-*`) — count as historical backups. Reclaim older ones once the live DB has newer writes and integrity checks pass.
 5. **Duplicate git repos** — compare remote + HEAD before removing. Same remote and same HEAD = duplicate candidate.
 6. **Browser caches** (`~/.cache/camoufox/`) — safe to delete when no creating process is running.
@@ -181,11 +149,7 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 
 ## Safety Rules
 
-<<<<<<< Updated upstream
 - NEVER modify `state.db` directly — Tier 3 analysis only. Note: `<hermes-home>/state.db` is typically a symlink to a profile's DB (e.g., `→ profiles/indigo/state.db`). Resolve symlinks before analyzing or reporting.
-=======
-- NEVER modify `state.db` directly — Tier 3 analysis only. Note: `~/.hermes/state.db` is typically a symlink to a profile's DB (e.g., `→ profiles/indigo/state.db`). Resolve symlinks before analyzing or reporting.
->>>>>>> Stashed changes
 - Enforce the one-historical-backup rule: keep current live data plus the newest valid historical backup; older backup copies/snapshots are reclaimable.
 - NEVER delete files without compressing first (Tier 2+) unless they are superseded historical backups being removed under the one-backup retention rule.
 - ALWAYS report what was done
@@ -193,11 +157,7 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 - If any operation fails, report the error and continue
 - If a snapshot deletion fails, leave the snapshot in place and report at the end
 - The most recent snapshot is always preserved (never auto-deleted) — **NOTE: this is currently undermined by `backup_retention` (see Known Issues); verify the snapshot dir survived after every `--clean`, do not assume it from the summary line.**
-<<<<<<< Updated upstream
-- **Do not preserve multiple backups**: The VPS policy is one historical backup plus current live data. Count all historical backup classes together (`<fs-root>/backup`, `<fs-root>/backups`, snapshots, migration backups, `.bak-*`) and report/remove older valid copies.
-=======
 - **Do not preserve multiple backups**: The VPS policy is one historical backup plus current live data. Count all historical backup classes together (`<fs-root>/backup`, `<backups-root>`, snapshots, migration backups, `.bak-*`) and report/remove older valid copies.
->>>>>>> Stashed changes
 
 ## Known Issues / Pitfalls
 
@@ -205,7 +165,6 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 `clean_backup_retention` keeps only the single newest candidate across ALL backup classes combined (`keep = valid[:1]`). The most-recent pre-update `state-snapshot` is itself a candidate in this scan. If a different backup file (e.g. a `transactions.db` copy) has a newer mtime, the snapshot is pushed into `reclaim` and `shutil.rmtree`'d — **violating the Safety Rule "the most recent snapshot is always preserved."** Symptom: after `--clean`, `clean_snapshots` reports `snapshots: freed 0.0 B` (the dir is already empty, so it has nothing to preserve) — do NOT read that 0.0 B as proof the snapshot survived. Verify the snapshot dir directly (see Verification). Fix is pending in `scripts/genie.py`; until then, treat snapshot preservation as UNVERIFIED after any `--clean` run. See `references/genie-snapshot-retention-bug.md` for the full analysis and reproduction recipe.
 
 ### genie emits no per-file deletion manifest
-<<<<<<< Updated upstream
 `--clean` prints only aggregate totals (e.g. "backup_retention: freed 26.6 GB"). Deleted paths are NOT logged. Once files are removed they are unrecoverable (no git/LFS tracking of `<hermes-home>`). To answer "what was deleted," reconstruct by comparing directory state before/after — you cannot recover a file list from the tool output. Always capture `ls -la` of every backup class BEFORE `--clean` if you need an audit trail.
 
 ### Wrong snapshot path in older docs
@@ -217,19 +176,6 @@ When re-investigating disk spikes from backup copies, the **live writer is `back
 **FIX APPLIED 2026-07-14 (verify before re-patching):** the prune was moved to BEFORE the 14G cp, a free-space guard (`readlink -f` + `stat -L`, skip copy if `avail < size*1.1`) was added, and `trap cleanup_partial ERR` removes the partial dir on failure. See `references/backup-prune-diskfull-trap.md` STATUS + Verification recipe — run the recipe first; if all three checks pass, the fix is intact and you must NOT re-apply it (doing so would duplicate the guards). The separate TASK-015 (state.db FTS-trigram bloat, VACUUM) is a distinct open task and is NOT covered by this fix.
 
 **Re-investigation discipline:** to find the live writer, follow the real chain (read `jobs.json` `command`/`script_path`, grep `<hermes-home>/cron/output/*/*.md` for the job name, follow `exec` chains in wrappers). Do NOT conclude root cause from a plausibly-named sibling. And check whether a retention line is *reachable* — a prune after a large/failing `cp` under `set -e` is dead code on a full disk.
-=======
-`--clean` prints only aggregate totals (e.g. "backup_retention: freed 26.6 GB"). Deleted paths are NOT logged. Once files are removed they are unrecoverable (no git/LFS tracking of `~/.hermes`). To answer "what was deleted," reconstruct by comparing directory state before/after — you cannot recover a file list from the tool output. Always capture `ls -la` of every backup class BEFORE `--clean` if you need an audit trail.
-
-### Wrong snapshot path in older docs
-The pre-update snapshot lives at `~/.hermes/profiles/<profile>/state-snapshots` (profile-scoped), confirmed by `FILESYSTEM.md` and genie's `snapshots_path` default. The bare path `~/.hermes/state-snapshots` is a different, usually-empty directory — do not verify against it.
-
-### Decoy-script trap + unreachable prune (CONFIRMED root cause of <fs-root>/backup bloat, 2026-07-13)
-When re-investigating disk spikes from backup copies, the **live writer is `backup_all_hermes_data.sh`** (`<fs-root>/indigo-repo/scripts/...`, exec'd via the ocas-custodian wrapper), NOT `backup_system.sh`. `backup_system.sh` targets `<backups-root>` (plural) and is **unused** — an earlier scan blamed it for "zero retention logic," which was wrong. The live `backup_all_hermes_data.sh` DOES have a prune line (`find <fs-root>/backup -mtime +3 -exec rm -rf`), but it sits at **line 114**, *after* the `cp ~/.hermes/state.db` (symlink -> 14G profile DB) at **line 51**, under `set -euo pipefail`. On a near-full disk the `cp` hits ENOSPC, the script aborts, and the prune **never runs** -> partial `active-dbs-*` dirs accumulate (all lacking `state.db` = the ENOSPC-abort signature).
-
-**FIX APPLIED 2026-07-14 (verify before re-patching):** the prune was moved to BEFORE the 14G cp, a free-space guard (`readlink -f` + `stat -L`, skip copy if `avail < size*1.1`) was added, and `trap cleanup_partial ERR` removes the partial dir on failure. See `references/backup-prune-diskfull-trap.md` STATUS + Verification recipe — run the recipe first; if all three checks pass, the fix is intact and you must NOT re-apply it (doing so would duplicate the guards). The separate TASK-015 (state.db FTS-trigram bloat, VACUUM) is a distinct open task and is NOT covered by this fix.
-
-**Re-investigation discipline:** to find the live writer, follow the real chain (read `jobs.json` `command`/`script_path`, grep `~/.hermes/cron/output/*/*.md` for the job name, follow `exec` chains in wrappers). Do NOT conclude root cause from a plausibly-named sibling. And check whether a retention line is *reachable* — a prune after a large/failing `cp` under `set -e` is dead code on a full disk.
->>>>>>> Stashed changes
 
 ## Error Handling
 
@@ -279,15 +225,9 @@ Any setting not present falls back to the built-in default shown below.
 ## Verification
 
 - `df -h /` — check disk usage dropped
-<<<<<<< Updated upstream
 - `du -sh <hermes-home>/` — check .hermes size
 - **Snapshot survival (MANDATORY):** `ls -la <hermes-home>/profiles/<profile>/state-snapshots/` — the most-recent pre-update snapshot dir MUST still be present. If empty, `backup_retention` deleted it (see Known Issues). A `snapshots: freed 0.0 B` line does NOT prove preservation.
 - **Live DB integrity:** for each live DB the user cares about, run `sqlite3 <db> "PRAGMA integrity_check;"` and confirm `ok`. For Styx: `<hermes-home>/data/styx.db` (often a symlink to the repo copy) and the live Plaid source `<hermes-home>/data/transactions.db`. Resolve symlinks first.
-=======
-- `du -sh ~/.hermes/` — check .hermes size
-- **Snapshot survival (MANDATORY):** `ls -la ~/.hermes/profiles/<profile>/state-snapshots/` — the most-recent pre-update snapshot dir MUST still be present. If empty, `backup_retention` deleted it (see Known Issues). A `snapshots: freed 0.0 B` line does NOT prove preservation.
-- **Live DB integrity:** for each live DB the user cares about, run `sqlite3 <db> "PRAGMA integrity_check;"` and confirm `ok`. For Styx: `~/.hermes/data/styx.db` (often a symlink to the repo copy) and the live Plaid source `~/.hermes/data/transactions.db`. Resolve symlinks first.
->>>>>>> Stashed changes
 - Session search still works (confirms state.db intact)
 
 ## Support File Map
