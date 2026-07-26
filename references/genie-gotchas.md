@@ -22,28 +22,17 @@ Operational lessons learned from running Genie in production. Read this after yo
 
 - **Off-hermes .cache consumers**: When `<fs-root>/.cache` is large, the usual culprits are: `ms-playwright/` (browser binaries, 1G+ rebuildable), `puccinialin/` (cargo/rustup cache, rebuildable), `chroma/` (embedding DB — check before deleting), `camoufox/` (stealth browser profile cache, 1-2GB, rebuildable). These are all Tier 1 safe rebuildable caches.
 - **`/tmp` not in assess output**: The `genie.py --assess` command does NOT report `/tmp/` contents, even when they contain gigabytes of reclaimable stale data. When assess shows zero or minimal Tier 1 targets but disk is still high, always manually check `/tmp/` with `du -sh /tmp/` and `find /tmp -type f -size +50M -mtime +1`. All `/tmp/` files older than 24h are Tier 1 zero-risk deletions.
-<<<<<<< Updated upstream
 - **`backups/` is outside genie's scope**: The genie script only scans `state-snapshots/`, `logs/`, `cron/output/`, and `sessions/`. It does NOT scan `backups/` — which is often the largest space consumer after snapshots. When genie's `--assess` shows minimal targets but disk is still high, always run `du -sh <fs-root>/backups/*/` and `ls -la <fs-root>/backups/` to inspect.
 - **Nested directory traversal**: Ensure `os.walk()` is used for recursive directory traversal. Always use `dirpath` from `os.walk()` — never rejoin filenames against the root path. See `references/os-walk-pitfall.md`.
 - **FILESYSTEM.md manifest can report stale/phantom targets**: The discovered targets section may show large file counts that don't match reality. Always verify manifest targets with direct filesystem checks (`find ... | wc -l`, `du -sh`) before reporting to the user. Run `--discover` to refresh the manifest if numbers seem off.
 - **Built-in snapshot path default is wrong for profile-scoped setups**: The default `GENIE_SNAPSHOTS_PATH` is `<hermes-home>/state-snapshots`, but in profile-scoped setups snapshots live at `<hermes-home>/profiles/indigo/state-snapshots`. The FILESYSTEM.md manifest corrects this, but if the manifest is missing or stale, genie won't find snapshots.
-=======
-- **`backups/` is outside genie's scope**: The genie script only scans `state-snapshots/`, `logs/`, `cron/output/`, and `sessions/`. It does NOT scan `backups/` — which is often the largest space consumer after snapshots. When genie's `--assess` shows minimal targets but disk is still high, always run `du -sh <backups-root>/*/` and `ls -la <backups-root>/` to inspect.
-- **Nested directory traversal**: Ensure `os.walk()` is used for recursive directory traversal. Always use `dirpath` from `os.walk()` — never rejoin filenames against the root path. See `references/os-walk-pitfall.md`.
-- **FILESYSTEM.md manifest can report stale/phantom targets**: The discovered targets section may show large file counts that don't match reality. Always verify manifest targets with direct filesystem checks (`find ... | wc -l`, `du -sh`) before reporting to the user. Run `--discover` to refresh the manifest if numbers seem off.
-- **Built-in snapshot path default is wrong for profile-scoped setups**: The default `GENIE_SNAPSHOTS_PATH` is `~/.hermes/state-snapshots`, but in profile-scoped setups snapshots live at `~/.hermes/profiles/indigo/state-snapshots`. The FILESYSTEM.md manifest corrects this, but if the manifest is missing or stale, genie won't find snapshots.
->>>>>>> Stashed changes
 
 ## State DB Gotchas
 
 - **FTS footprint is significant**: FTS trigram indexes add substantial overhead proportional to message count. For large DBs (100K+ messages), expect FTS overhead in the multi-GB range. FTS can be dropped and rebuilt on demand — it contains no unique data, only search indexes.
 - **VACUUM INTO rebuilds FTS indexes**: `VACUUM INTO` on a DB with FTS tables rebuilds all FTS indexes during the copy. The result is as large as the input — it does NOT compact FTS overhead. To truly compact: copy the DB, drop FTS tables on the copy, then `.backup` to a new file. See `references/state-db-compaction.md`.
 - **SQLite timeouts on large state.db**: Large state.db files cause Python sqlite3 queries (especially `dbstat` and `COUNT(*)`) to timeout at 30-60s. Use the `sqlite3` CLI binary for lightweight queries. Avoid `dbstat` aggregation on large DBs.
-<<<<<<< Updated upstream
 - **state.db is often a symlink**: `<hermes-home>/state.db` may be a symlink to a profile-scoped DB (e.g., `→ <hermes-home>/profiles/indigo/state.db`). Always resolve with `readlink -f` before operating on it. Multiple "instances" found by `find` may actually be the same file reached via symlinks + hardlinks. Check inode: `ls -li` to deduplicate.
-=======
-- **state.db is often a symlink**: `~/.hermes/state.db` may be a symlink to a profile-scoped DB (e.g., `→ ~/.hermes/profiles/indigo/state.db`). Always resolve with `readlink -f` before operating on it. Multiple "instances" found by `find` may actually be the same file reached via symlinks + hardlinks. Check inode: `ls -li` to deduplicate.
->>>>>>> Stashed changes
 - **Genie has no --vacuum flag**: If the user asks to vacuum state.db, genie does not handle it. Run `sqlite3 <db> "VACUUM;"` manually (with timeout). For large DBs that time out, use `PRAGMA incremental_vacuum(1000)` as a non-blocking alternative. See `references/state-db-compaction.md`.
 - **Assess shows -1 rows**: The `--assess` output may report `-1 rows` for all tables. This is a sqlite3 timeout artifact, not real data. Do not treat it as a corruption signal.
 
@@ -52,10 +41,6 @@ Operational lessons learned from running Genie in production. Read this after yo
 - **Large file counts**: With 5,000+ files to gzip, use `terminal(background=True, notify_on_complete=True)`.
 - **Disk-at-100% blocks operations**: When disk is at 100%, Genie cannot write journal files, create temp files, or stage data. Check `df -h /` first — if at 100%, focus on immediate space recovery (Tier 1 cleanup, snapshot deletion) before attempting any backup workflow.
 - **Script/version desync during self-update**: Always compare script hashes even when versions match. See `references/self-update-genie.md`.
-<<<<<<< Updated upstream
 - **`~` path resolution in cron context**: When running as a cron job, `HOME` is set to the profile-scoped path, not `<fs-root>/`. **Always use absolute paths** (`<hermes-home>/...`) in cron context.
-=======
-- **`~` path resolution in cron context**: When running as a cron job, `HOME` is set to the profile-scoped path, not `<fs-root>/`. **Always use absolute paths** (`~/.hermes/...`) in cron context.
->>>>>>> Stashed changes
 - **GitHub default branch is `main`**: The genie repo's default branch is `main`, not `master`. Using `master` in raw GitHub URLs returns 404 or stale content.
 - **Script path deduplication**: The three script paths in Step 0 may resolve to the same file (hardlink or symlink). `cp` between them will fail with "same file" — this is expected. Use `cmp` or `ls -i` (inode check) to verify before assuming they're independent copies.
