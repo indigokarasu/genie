@@ -113,6 +113,8 @@ FILESYSTEM_MD_PATHS = [
     os.path.join(HERMES_HOME, "FILESYSTEM.md"),
 ]
 
+FS_ROOT = os.path.expanduser("~")  # root of user-owned data zones (backups/, projects/)
+
 DEFAULTS = {
     "snapshot_max_age_days": _skill_config("snapshot_max_age_days", 7),
     "log_compress_age_days": _skill_config("log_compress_age_days", 7),
@@ -127,12 +129,12 @@ DEFAULTS = {
     "cron_output_path": os.path.join(PROFILE_HOME, "cron-output"),
     "snapshots_path": os.path.join(PROFILE_HOME, "state-snapshots"),
     "commons_path": os.path.join(PROFILE_HOME, "commons"),
-    "backups_path": "<fs-root>/backups",
-    "backup_paths": ["<fs-root>/backup", "<fs-root>/backups"],
+    "backups_path": FS_ROOT + "/backups",
+    "backup_paths": [FS_ROOT + "/backup", FS_ROOT + "/backups"],
     "historical_backup_keep_count": 1,
     "tmp_stale_hours": _skill_config("tmp_stale_hours", 24),
     "git_clone_max_age_days": _skill_config("git_clone_max_age_days", 5),
-    "git_clones_path": "<fs-root>/projects",
+    "git_clones_path": FS_ROOT + "/projects",
     "allow_local_state_db_backup": _skill_config("allow_local_state_db_backup", False),
 }
 
@@ -166,8 +168,8 @@ BUILTIN_TARGETS = {
     },
     "backups": {
         "tier": 1, "action": "delete_dirs",
-        "max_age_days": 30, "path": "<fs-root>/backups",
-        "pattern": "<fs-root>/backups/*/",
+        "max_age_days": 30, "path": FS_ROOT + "/backups",
+        "pattern": FS_ROOT + "/backups/*/",
         "description": "Dated backup directories",
     },
     "tmp": {
@@ -178,8 +180,8 @@ BUILTIN_TARGETS = {
     },
     "git-clones": {
         "tier": 1, "action": "delete_git_clones",
-        "max_age_days": 5, "path": "<fs-root>/projects",
-        "pattern": "<projects-root>/*/",
+        "max_age_days": 5, "path": FS_ROOT + "/projects",
+        "pattern": FS_ROOT + "/projects/*/",
         "description": "Inactive git clones (untouched >5d, confirmed remote)",
         "source": "builtin",
     },
@@ -266,7 +268,7 @@ def historical_backup_candidates(cfg):
         if not os.path.isdir(path):
             return 1
         key_files = {
-            "state.db", "chroma.sqlite3", "chronicle.lbug", "weave.lbug",
+            "state.db", "chroma.sqlite3", "chronicle.db", "weave.sqlite",
             "styx.db", "transactions.db", "mempalace.tar.gz",
         }
         try:
@@ -838,14 +840,14 @@ def discover_filesystem():
         except PermissionError:
             pass
 
-    # Check <fs-root>/backups
-    if os.path.isdir("<fs-root>/backups"):
-        size = du("<fs-root>/backups")
+    # Check FS_ROOT/backups
+    if os.path.isdir(FS_ROOT + "/backups"):
+        size = du(FS_ROOT + "/backups")
         if size > 10 * 1024 * 1024:  # > 10MB
             discovered["backups"] = {
                 "tier": 1, "action": "delete_dirs",
-                "max_age_days": 30, "path": "<fs-root>/backups",
-                "pattern": "<fs-root>/backups/*/",
+                "max_age_days": 30, "path": FS_ROOT + "/backups",
+                "pattern": FS_ROOT + "/backups/*/",
                 "description": f"Backup directories — {fmt(size)}",
                 "source": "discovered",
             }
@@ -890,12 +892,12 @@ def discover_filesystem():
             }
             break
 
-    # Check for large directories at <fs-root>/ that aren't in known zones
-    if os.path.isdir("/root"):
+    # Check for large directories at FS_ROOT that aren't in known zones
+    if os.path.isdir(FS_ROOT):
         known_zones = {"projects", "backups", "trash", "hermes-agent", "hermes-ecosystem"}
         try:
-            for entry in os.listdir("/root"):
-                full = os.path.join("/root", entry)
+            for entry in os.listdir(FS_ROOT):
+                full = os.path.join(FS_ROOT, entry)
                 if not os.path.isdir(full):
                     continue
                 if entry in known_zones or entry.startswith("."):
@@ -905,7 +907,7 @@ def discover_filesystem():
                     discovered[f"root-{entry}"] = {
                         "tier": 3, "action": "analyze_only",
                         "path": full,
-                        "description": f"Unknown <fs-root>/ directory — {fmt(size)} (review manually)",
+                        "description": f"Unknown {FS_ROOT}/ directory — {fmt(size)} (review manually)",
                         "source": "discovered_unexpected",
                     }
         except PermissionError:
@@ -1388,7 +1390,7 @@ def assess(cfg, targets=None):
         lines.append(f"/tmp: {fmt(tmp_size)} total, {old_tmp} files/dirs older than {cfg.get('tmp_stale_hours', 24)}h")
 
     # Git clones
-    gcp = cfg.get("git_clones_path", "<fs-root>/projects")
+    gcp = cfg.get("git_clones_path", FS_ROOT + "/projects")
     if os.path.isdir(gcp):
         old_clones = 0
         recent_clones = 0
@@ -1494,7 +1496,7 @@ def clean(cfg):
         results.append(clean_tmp("/tmp", cfg["tmp_stale_hours"], cfg["dry_run"]))
 
     # Git clones (inactive, confirmed remote)
-    git_clones_path = cfg.get("git_clones_path", "<fs-root>/projects")
+    git_clones_path = cfg.get("git_clones_path", FS_ROOT + "/projects")
     if os.path.isdir(git_clones_path):
         results.append(clean_git_clones(git_clones_path, cfg["git_clone_max_age_days"], cfg["dry_run"]))
 
@@ -1515,6 +1517,29 @@ def clean(cfg):
 
 
 # ── Main ───────────────────────────────────────────────────────────────────
+
+def _journal_run(args, output):
+    """Append a run record to the skill journal. Fail-safe by design: journaling
+    must never be able to break a cleanup run."""
+    try:
+        import json as _json
+        import time as _time
+        jdir = os.path.join(PROFILE_HOME, "commons", "journals", "ocas-genie")
+        os.makedirs(jdir, exist_ok=True)
+        mode = ("clean" if args.clean else "analyze" if args.analyze
+                else "discover" if args.discover else "assess")
+        rec = {
+            "ts": _time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+            "mode": mode,
+            "tier": args.tier,
+            "dry_run": bool(args.dry_run),
+            "lines": output,
+        }
+        with open(os.path.join(jdir, "runs.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(_json.dumps(rec) + "\n")
+    except Exception:
+        pass
+
 
 def main():
     parser = argparse.ArgumentParser(description="Genie — VPS Disk Guardian")
@@ -1648,6 +1673,8 @@ def main():
                     if os.path.exists(path):
                         analysis = analyze_path(path, tid)
                         output.append(f"  {t.get('description', tid)}: {fmt(analysis['size'])}")
+
+    _journal_run(args, output)
 
     if args.json:
         print(json.dumps({"lines": output, "config": {k: str(v) for k, v in cfg.items()}}))

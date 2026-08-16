@@ -103,6 +103,9 @@ def rebuild_fts(db_path, verify=True):
     return build_time
 
 if __name__ == "__main__":
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print(__doc__.strip() if __doc__ else "Usage: python3 genie_rebuild_fts.py [--db PATH] [--verify]")
+        sys.exit(0)
     db_path = DB_PATH
     if "--db" in sys.argv:
         db_path = sys.argv[sys.argv.index("--db") + 1]

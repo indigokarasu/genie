@@ -1,72 +1,65 @@
 # ⚙️ Genie
 
-  <img src="./assets/readme/hero.jpg" width="100%" alt="Genie">
-
-If true, only report — don't delete/compress
+<img src="./assets/readme/hero.jpg" width="100%" alt="Genie">
 
 **Skill name:** `ocas-genie`
-**Version:** 1.7.0
-**Type:** 
+**Version:** 1.7.1
+**Type:** workflow
 **Layer:** infrastructure
-**Author:** <agent-name>
+**Author:** Indigo Karasu
 
 ---
 
-## 📖 Overview
+## Overview
 
-If true, only report — don't delete/compress
+Genie is a VPS disk-space monitor and safe-cleanup skill. It audits the
+filesystem, identifies cleanup targets by risk tier, estimates the space each
+target would reclaim, and executes only deletions that cannot reduce
+functionality. Databases are analyzed read-only and never repaired or
+VACUUMed automatically.
 
----
+## Usage
 
-## 🔧 Commands
+All modes run from `scripts/genie.py`:
 
-- `/root` needs a safe audit/classification pass
-- `<fs-root>/backup/*`
-- `<fs-root>/backups/*`
-- `<hermes-home>/profiles/<profile>/state-snapshots/*` (profile-scoped — the bare `<hermes-home>/state-snapshots` is a different, usually-empty path)
-- `<hermes-home>/migrations/*/backups/*`
-- `<hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
-- `<hermes-home>/profiles/indigo/scripts/genie.py` (profile scripts dir — alternate location)
-- `<hermes-home>/skills/ocas-genie/scripts/genie.py` (skill-bundled)
-- `df -h /` — check disk usage dropped
-- `du -sh <hermes-home>/` — check .hermes size
+```bash
+python3 scripts/genie.py --assess            # read-only report (default mode)
+python3 scripts/genie.py --clean --dry-run   # preview what --clean would do
+python3 scripts/genie.py --clean --tier 1    # execute Tier 1 (safe) cleanup
+python3 scripts/genie.py --analyze           # Tier 3 read-only analysis
+python3 scripts/genie.py --discover          # rescan filesystem, refresh the manifest
+python3 scripts/genie.py --json              # machine-readable output
+```
 
----
+Tiers: **1** = safe (caches, stale tmp, aged logs and snapshots),
+**2** = low risk (requires confirmation), **3** = analysis-only (never
+auto-deleted).
 
-## 📊 Outputs
+## Safety rules
 
-See `SKILL.md` for outputs, journals, and persistence rules.
+- A bare invocation is read-only (`--assess`); nothing is deleted without
+  an explicit `--clean`.
+- Age-based cleanup is designed to protect the newest snapshot/backup —
+  verify survival after every `--clean` (see Known Issues in `SKILL.md`).
+- Failed deletions are reported and left in place, never retried
+  destructively.
+- Every run appends a record to the skill journal
+  (`commons/journals/ocas-genie/runs.jsonl`).
 
----
-
-## 📄 Files
+## Files
 
 | File | Purpose |
 |---|---|
-| `SKILL.md` | Skill definition |
-| `references/` | Supporting documentation |
-| `scripts/` | Helper scripts |
+| `SKILL.md` | Skill definition, procedure, and known issues |
+| `scripts/genie.py` | The assessment and cleanup engine |
+| `scripts/genie_rebuild_fts.py` | FTS index rebuild helper |
+| `references/` | Operational notes, pitfalls, and worked examples |
 
+## Documentation
 
-## Changelog
+Read `SKILL.md` for operational detail, tier definitions, and validation
+rules. Read `references/` for detailed specifications and postmortems.
 
-- [1.1.0] - 2026-05-23
-- Added
-- Changed
-- [1.0.0] - 2026-04-20
-- Added
+## License
 
----
-
-## 📚 Documentation
-
-Read `SKILL.md` for operational details, schemas, and validation rules.
-
-Read `references/` for detailed specifications and examples.
-
-
----
-
-## 📄 License
-
-MIT License — see `LICENSE` for details.
+MIT License — see `LICENSE`.

@@ -1,11 +1,19 @@
 ---
 name: ocas-genie
-description: VPS disk cleanup, root filesystem audit, and backup retention. Deletes old snaps, logs, and cron files; investigates disk spikes; enforces one historical backup on the VPS. Not for database maintenance beyond analysis, log rotation configuration, or real-time monitoring.
-version: 1.7.0
+description: Safely audits and reclaims VPS/Linux disk space, investigates root-filesystem growth, and enforces backup retention when disk usage is high or maintenance is requested; use keywords disk cleanup, disk full, disk usage, snapshots, backups, stale repos, or disk spike. NOT for database maintenance beyond read-only analysis, logrotate configuration, or real-time monitoring.
+version: 1.7.1
 author: Indigo Karasu (indigokarasu)
 license: MIT
 platforms: [linux]
-source: https://github.com/<agent-handle>/genie
+source: https://github.com/indigokarasu/genie
+triggers:
+  - disk cleanup
+  - disk full
+  - disk usage
+  - disk spike
+  - snapshots
+  - backup retention
+  - stale repos
 includes:
   - references/**
   - scripts/**
@@ -119,6 +127,16 @@ For the full audit workflow, see `references/root-audit-and-backup-retention.md`
 
 ## Procedure
 
+Use this checklist so destructive cleanup is preceded by assessment and followed by independent verification:
+
+- [ ] Locate the live script and confirm the intended Hermes home/profile paths.
+- [ ] Run `--assess` (or `--clean --dry-run`) and capture the report before changing files.
+- [ ] Review retention candidates and confirm the newest snapshot/backup is protected.
+- [ ] Run the smallest authorized cleanup tier.
+- [ ] Verify `df`, snapshot survival, and relevant database integrity after cleanup.
+
+The sequence matters because an aggregate cleanup total cannot prove which backup survived, and a nearly-full disk can make a later verification command fail.
+
 1. **Locate the script** — check these paths in order:
    - `<hermes-home>/profiles/indigo/skills/ocas-genie/scripts/genie.py` (profile — note `ocas-` prefix)
    - `<hermes-home>/profiles/indigo/scripts/genie.py` (profile scripts dir — alternate location)
@@ -143,7 +161,7 @@ Some large disk consumers require an audit pass before cleanup because they may 
 5. **Duplicate git repos** — compare remote + HEAD before removing. Same remote and same HEAD = duplicate candidate.
 6. **Browser caches** (`~/.cache/camoufox/`) — safe to delete when no creating process is running.
 7. **Stale /tmp extracts** (`/tmp/camoufox-*/`, `/tmp/uc_*/`, `/tmp/body_*`) — safe to delete when no creating process is running.
-8. **state.db VACUUM** — Genie does not run `VACUUM` automatically. Report bloat/freelist only.
+8. **state.db VACUUM** — Genie does not run `VACUUM` automatically. As of v1.7.x the default `--assess` (and `--clean`/`--discover`) pass reads `PRAGMA page_count`/`page_size`/`freelist_count` and prints `live_bytes`, `bloat_bytes`, `bloat_pct`, and whether a classic `VACUUM` (which duplicates the file inline → needs ~`live_bytes` free on top of the original) would fit. **Decision rule: if `bloat_pct` < ~5%, do NOT VACUUM — the file is mostly real data; reclaim via caches/tmp/repos instead.** Most live agent DBs sit at 0.5–2.4% bloat. See `references/state-db-vacuum-feasibility.md`. A 2.5 GB+ uncheckpointed WAL is itself abnormal — flag the missing checkpoint separately; do not attribute it to bloat.
 
 When disk is critically high, flag these in the report even if `--clean` cannot auto-clean them.
 
@@ -158,6 +176,7 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 - If a snapshot deletion fails, leave the snapshot in place and report at the end
 - The most recent snapshot is always preserved (never auto-deleted) — **NOTE: this is currently undermined by `backup_retention` (see Known Issues); verify the snapshot dir survived after every `--clean`, do not assume it from the summary line.**
 - **Do not preserve multiple backups**: The VPS policy is one historical backup plus current live data. Count all historical backup classes together (`<fs-root>/backup`, `<backups-root>`, snapshots, migration backups, `.bak-*`) and report/remove older valid copies.
+- **Repo deletion guard (when user authorizes "delete cloned repos"):** do NOT blindly `rm` every clone. Classify first and only delete repos that are ALL of: (a) **clean** (`git status --porcelain` = 0), (b) **have a remote** (`git remote get-url origin` exists — re-clonable), (c) **untouched > `git_clone_max_age_days`** (default 5), (d) **not the active working dir or a protected skill-source tree** (e.g. `indigokarasu-site-commons/*`, `<operator-site>`, in-progress projects). Explicitly skip any repo with uncommitted work or unpushed commits on a no-upstream / feature branch (`git rev-list --count @{u}..HEAD` > 0, or `ahead=?`) — deleting those is data loss, not cleanup. Report the held-back set so the user can decide.
 
 ## Known Issues / Pitfalls
 
@@ -177,12 +196,20 @@ When re-investigating disk spikes from backup copies, the **live writer is `back
 
 **Re-investigation discipline:** to find the live writer, follow the real chain (read `jobs.json` `command`/`script_path`, grep `<hermes-home>/cron/output/*/*.md` for the job name, follow `exec` chains in wrappers). Do NOT conclude root cause from a plausibly-named sibling. And check whether a retention line is *reachable* — a prune after a large/failing `cp` under `set -e` is dead code on a full disk.
 
+### Publishing a genie.py change when the remote was force-updated (2026-07-26)
+The live skill dir `/root/.hermes/profiles/indigo/skills/ocas-genie` IS its own git repo (remote `indigokarasu/genie`). The daily `skill-sync-all` cron can clobber unpushed edits, so PUSH FROM THE LOCAL SKILL REPO, never a `/tmp` clone. If `git push` is rejected because the remote advanced (and `fetch` shows `(forced update)`): a plain `rebase origin/main` may hit CONFLICT in `references/*.md` (their PII-sanitize/beautify commits) — these are doc-only and unrelated to `genie.py`. Resolve by `git checkout --theirs -- references/` then `git rebase --skip` for each conflicting doc commit; your `genie.py` commit (separate file) will apply cleanly on top. Then non-force push. Do NOT `--force` push (could clobber remote work). After push, verify `git rev-list --count HEAD..origin/main` = 0. If an unrelated uncommitted edit (e.g. README) is present, stash it before rebasing and do not bundle it into your commit.
+
 ## Error Handling
 
-- **gzip failures:** If `gzip -t` reports a `.gz` is corrupt but the original exists, keep the original and regenerate. Never delete the original while the gzip is corrupt.
-- **Concurrent gzip race:** Only one gzip per file. A timed-out foreground command can leave a background shell that spawns a second gzip. Verify with `gzip -t`, then remove the original.
-- **Disk-at-100%:** Focus on immediate space recovery (Tier 1 cleanup) before any backup workflow.
-- **Snapshot deletion failure:** Leave the snapshot in place, report the error, continue to next target.
+| Failure | Handling |
+|---|---|
+| `--clean` reports an operation error | Record the path/error, continue independent targets, and report every failed target; do not claim cleanup completed. |
+| Snapshot deletion fails | Leave the snapshot in place, verify the directory directly, and report the failure. |
+| Disk reaches 100% | Run only Tier 1 recovery first; defer backup workflows because copy/verification can require temporary space. |
+| `gzip -t` finds corruption | Keep the original, regenerate the archive, and delete nothing until the replacement passes `gzip -t`. |
+| Live DB integrity check is not `ok` | Stop database-related follow-up, preserve the DB, and escalate the exact result; Genie never repairs DBs. |
+
+The explicit fallback paths prevent a partial cleanup or a failed verification from being misreported as a successful run.
 
 ## What Genie Cleans
 
@@ -199,8 +226,18 @@ When re-investigating disk spikes from backup copies, the **live writer is `back
 1. **Session JSON duplicates** — compress after 14 days (data also in `state.db`)
 
 ### Tier 3 — Analysis Only (never auto-executes)
-1. **state.db bloat analysis** — reports DB size, freelist waste
+1. **state.db bloat analysis** — runs on the **default** `--assess`/`--clean`/`--discover` pass (not just `--analyze`). Reports `live_bytes`, `bloat_bytes`, `bloat_pct`, and a VACUUM-feasibility verdict (see Manual / Investigative Targets #8 and `references/state-db-vacuum-feasibility.md`).
 2. **Large directories** — reports git checkpoints, commons/data, commons/db for manual review
+
+## Manual Repo Pruning (user-requested clone deletion)
+
+When the user asks to delete cloned repos beyond Genie's automated inactive-clone Tier 1, do **NOT** blanket `rm -rf` every repo — clones may hold unpushed commits or be live skill source. Full decision gate + blocker playbook in `references/manual-repo-pruning.md`.
+
+- **Eligible (delete now):** clean (`git status --porcelain` empty), has a remote (re-clonable), untouched > `git_clone_max_age_days` (5d), NOT a protected path (live skill dirs, active working repo, `indigokarasu-site-commons/*`).
+- **Needs sync first:** dirty or `ahead>0`. Commit → push → re-verify `dirty==0 && ahead==0` → only then `rm -rf`. Never delete before the remote actually has the commit.
+- **Exclude:** stale mirrors (local clone older/smaller than the live source, e.g. `indigo-repo` 104 vs live 141 skills) and protected live-skill directories. For a stale mirror where local HEAD == remote HEAD, a local-only delete is safe (GitHub holds the commit; live skills live elsewhere) — but a daily skill-sync may recreate it.
+
+Blockers that prevent a clean sync: dead local `origin` remote → repush to the real GitHub remote; nested git repo / submodule → sync the nested repo then pin the parent gitlink; pull-rebase conflict on a stale mirror → `git reset --hard origin/main` (remote supercedes — ONLY for disposable mirror clones; NEVER in a live skill dir, where divergence must refuse loudly and be reconciled with an explicit rebase); husky pre-push test stalls → do **NOT** bypass the hook, diagnose/fix the suite or drop the clone after user confirms.
 
 ## Configuration
 
@@ -243,11 +280,13 @@ Any setting not present falls back to the built-in default shown below.
 | `references/snapshot-backup-redaction.md` | Backing up snapshots to git/LFS |
 | `references/snapshot-structures.md` | Snapshot format breakdown |
 | `references/state-db-compaction.md` | Tackling state.db bloat |
+| `references/state-db-vacuum-feasibility.md` | PRAGMA recipe + disk math for VACUUM feasibility; why `bloat_pct` <5% means DON'T VACUUM |
 | `references/state-db-size-breakdown.md` | State DB composition analysis |
 | `references/disk-growth-patterns.md` | Recurring disk hogs: pre-update snapshots, <fs-root>/backup/, browser caches |
 | `references/state-db-retention.md` | State DB retention policy: audit all instances, keep current + one backup, delete oldest first |
 | `references/self-update-genie.md` | Self-update hash comparison procedure |
 | `references/repo-path-conventions.md` | Repo path convention — all remote clones under `projects/github*` |
+| `references/manual-repo-pruning.md` | User-requested clone deletion: decision gate + blocker playbook (dead remote, nested submodule, husky-stall, stale mirror) |
 | `scripts/genie.py` | Main cleanup script |
 | `scripts/genie_rebuild_fts.py` | FTS rebuild after restoring no-FTS backup |
 | `references/genie-snapshot-retention-bug.md` | CONFIRMED bug: backup_retention deletes the most-recent rollback snapshot; post-clean verification recipe; Plaid-source vs Styx DB distinction |

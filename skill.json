@@ -1,6 +1,6 @@
 {
   "name": "ocas-genie",
-  "version": "1.1.0",
+  "version": "1.7.1",
   "description": "Genie: VPS disk space monitor and safe cleanup. Identifies cleanup targets, estimates space reclamation, and executes safe deletions without reducing functionality.",
   "author": "Indigo Karasu",
   "email": "mx.indigo.karasu@gmail.com",
