@@ -78,3 +78,27 @@ environment/config, regex edges), require an executed reproduction rather than
 a hypothesis, then have a *different* reviewer try to refute each claim. Two
 claims were correctly refuted this way — an under-deletion complaint and a
 by-design archive rule — which is what keeps the confirmed set trustworthy.
+
+### The second wave (v1.8.2)
+
+The first fix pass addressed the findings visible in the audit's early
+returns. Reading the completed run showed 25 confirmed findings rather than
+six — a reminder that **a partial result is not a result**. The rest fell into
+two families:
+
+*The probe can be lied to.* A safety check that shells out inherits both the
+environment and the repository's configuration, and either can disarm it:
+`GIT_DIR` redirects every command at another repo; `status.showUntrackedFiles=no`
+hides never-committed files; `diff.ignoreSubmodules=all` hides submodule work;
+`git stash list` reads a reflog that may have expired while `refs/stash` still
+holds the data. Scrub the environment, force the config with `-c`, and prefer
+plumbing (`rev-parse --verify refs/stash`) over porcelain.
+
+*The repository is bigger than its working tree.* Submodules and linked
+worktrees are separate stores that the parent's `status` says nothing about,
+and deleting the parent takes them with it.
+
+And in retention: grouping matters as much as ordering. A global "keep 1"
+across unrelated roots means the newest backup anywhere deletes every other
+system's only copy, and a completeness score used as the primary sort key will
+happily discard today's backup in favour of a year-old one.

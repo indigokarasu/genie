@@ -104,6 +104,42 @@ def main():
         check("all-invalid: keeps one anyway", len(plan["keep"]) == 1,
               [os.path.basename(k["path"]) for k in plan["keep"]])
         check("all-invalid: reclaims the rest", len(plan["reclaim"]) == 1)
+
+        # recency decides: a newer PARTIAL backup must never cause today's copy
+        # to be deleted in favour of a much older complete one
+        root3 = os.path.join(root, "b3")
+        os.makedirs(root3)
+        old_complete = os.path.join(root3, "full-20250101")
+        os.makedirs(old_complete)
+        for name in ("chronicle.db", "weave.sqlite", "styx.db"):
+            touch(os.path.join(old_complete, name), "old")
+        new_partial = os.path.join(root3, "full-20260816")
+        os.makedirs(new_partial)
+        touch(os.path.join(new_partial, "chronicle.db"), "today")
+        os.utime(old_complete, (1735689600, 1735689600))
+        plan3 = genie.backup_retention_plan(
+            {"backup_paths": [root3], "snapshots_path": None,
+             "historical_backup_keep_count": 1})
+        kept = {os.path.basename(k["path"]) for k in plan3["keep"]}
+        check("today's backup is never reclaimed", "full-20260816" in kept, sorted(kept))
+        check("the complete older backup is also kept", "full-20250101" in kept, sorted(kept))
+
+        # retention is per class/root, so separate roots cannot delete each
+        # other's only copy
+        r_a = os.path.join(root, "rootA")
+        r_b = os.path.join(root, "rootB")
+        for base in (r_a, r_b):
+            os.makedirs(base)
+            for day in ("20260810", "20260815"):
+                d = os.path.join(base, "dump-%s" % day)
+                os.makedirs(d)
+                touch(os.path.join(d, "chronicle.db"), "x")
+        plan4 = genie.backup_retention_plan(
+            {"backup_paths": [r_a, r_b], "snapshots_path": None,
+             "historical_backup_keep_count": 1})
+        kept_roots = {os.path.dirname(k["path"]) for k in plan4["keep"]}
+        check("each backup root keeps its own", kept_roots == {r_a, r_b},
+              sorted(os.path.basename(x) for x in kept_roots))
     finally:
         shutil.rmtree(root, ignore_errors=True)
 

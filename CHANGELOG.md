@@ -2,6 +2,38 @@
 
 All notable changes to the genie skill are documented here.
 
+## [1.8.2] - 2026-08-16
+
+The completed audit confirmed 25 findings (5 refuted). 1.8.1 covered the first
+wave; this release closes the rest. Tests: 19 gate cases, 22 retention
+assertions.
+
+### Fixed
+- **Probes trusted their environment.** `GIT_DIR` / `GIT_WORK_TREE` inherited
+  from the environment pointed every check at a different repository, so a
+  dirty clone reported clean. The git environment is now scrubbed, and
+  `GIT_TERMINAL_PROMPT=0` prevents a credential prompt from hanging a run.
+- **Probes trusted the repository's own config.** A repo setting
+  `status.showUntrackedFiles=no`, `diff.ignoreSubmodules=all`, or
+  `submodule.<name>.ignore=all` could hide its uncommitted work from the gate.
+  Both settings are now forced on the command line, which beats repo, global
+  and system config.
+- **Stash detection failed open.** `git stash list` reads the reflog, so after
+  a reflog expiry (or a damaged `.git/logs`) it printed nothing while
+  `refs/stash` still held the work. The gate now resolves the ref itself.
+- **skip-worktree / assume-unchanged files were invisible** to `git status`,
+  so a tracked file holding local-only content looked clean.
+- **Submodules were never inspected** — their commits live in their own
+  repositories, and the parent's status says nothing about them.
+- **Linked worktrees were ignored**, though they share the clone's object
+  store and are destroyed with it.
+- **Retention pooled every root and class into one global "keep 1"**, so
+  unrelated systems deleted each other's only backup. Retention now applies
+  within each class and root.
+- **`backup_score` outranked recency**, so retention could keep a
+  19-month-old backup and delete today's. Recency now selects the survivor and
+  completeness only adds a rescue keep.
+
 ## [1.8.1] - 2026-08-16
 
 An adversarial audit of the 1.8.0 safety work reproduced six further paths to

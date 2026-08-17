@@ -398,8 +398,24 @@ def backup_retention_plan(cfg):
             valid.append(item)
 
     keep_count = max(1, int(cfg.get("historical_backup_keep_count", 1)))
-    keep = valid[:keep_count]
-    reclaim = invalid + valid[keep_count:]
+    # Retention applies WITHIN each class and root, never across them: pooling
+    # two backup roots, migration backups and profile .bak files into a single
+    # global "keep 1" makes unrelated systems delete each other's only copy.
+    groups = {}
+    for item in valid:
+        groups.setdefault(item.get("kind", "?"), []).append(item)
+    keep, reclaim = [], list(invalid)
+    for _kind, items in sorted(groups.items()):
+        # Recency decides. backup_score only rescues a complete backup from
+        # being superseded by a newer partial one — as a veto, never as the
+        # primary key, which is how a 19-month-old copy outranked today's.
+        items.sort(key=lambda i: i["mtime"], reverse=True)
+        chosen = items[:keep_count]
+        most_complete = max(items, key=lambda i: i["score"])
+        if most_complete not in chosen:
+            chosen = chosen + [most_complete]
+        keep.extend(chosen)
+        reclaim.extend([i for i in items if i not in chosen])
     if not keep and reclaim:
         # Every candidate was classed invalid (e.g. all are local state.db
         # copies). Reclaiming the whole set would leave no historical backup at
@@ -1113,9 +1129,15 @@ def clean_backup_retention(cfg, dry_run):
 def _git(path, *args, timeout=30):
     """Run git in path. Returns (ok, stdout). ok=False on any failure —
     callers must treat a failed probe as UNSAFE, never as permission."""
+    # GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE inherited from the environment
+    # silently redirect every probe at another repository, so a dirty clone
+    # reports clean. Scrub them; never prompt for credentials.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env["GIT_TERMINAL_PROMPT"] = "0"
     try:
         r = subprocess.run(["git", "-C", path] + list(args),
-                           capture_output=True, text=True, timeout=timeout)
+                           capture_output=True, text=True, timeout=timeout,
+                           env=env)
         return r.returncode == 0, r.stdout.strip()
     except Exception:
         return False, ""
@@ -1147,7 +1169,14 @@ def clone_delete_blockers(path, protected=None, verify_remote=True):
     for pat in (protected or []):
         if pat and (os.path.basename(path) == pat or pat in path):
             blockers.append("protected path (%s)" % pat)
-    ok, out = _git(path, "status", "--porcelain", "--ignored")
+    # -c beats repo, global and system config: a repository that sets
+    # status.showUntrackedFiles=no or ignores its submodules must not be able
+    # to hide its own uncommitted work from the gate.
+    ok, out = _git(path,
+                   "-c", "status.showUntrackedFiles=normal",
+                   "-c", "diff.ignoreSubmodules=none",
+                   "status", "--porcelain", "--ignored",
+                   "--untracked-files=normal", "--ignore-submodules=none")
     if not ok:
         return blockers + ["git status failed (repo unreadable)"]
     dirty, ignored = [], []
@@ -1166,9 +1195,14 @@ def clone_delete_blockers(path, protected=None, verify_remote=True):
     if precious:
         blockers.append("%d git-ignored path(s) exist only here (e.g. %s)"
                         % (len(precious), ", ".join(sorted(precious)[:3])))
-    ok, out = _git(path, "stash", "list")
-    if ok and out:
-        blockers.append("%d stash entr(ies)" % len(out.splitlines()))
+    # `git stash list` reads the reflog and fails OPEN: after a reflog expiry
+    # or a damaged .git/logs it prints nothing while refs/stash still holds the
+    # stashed work. Gate on the ref itself.
+    ok_ref, _sha = _git(path, "rev-parse", "--verify", "--quiet", "refs/stash")
+    ok_list, out = _git(path, "stash", "list")
+    if ok_ref:
+        count = len(out.splitlines()) if (ok_list and out) else "unknown number of"
+        blockers.append("%s stash entr(ies)" % count)
     ok, head = _git(path, "rev-parse", "--abbrev-ref", "HEAD")
     if not ok:
         return blockers + ["cannot read HEAD"]
@@ -1195,6 +1229,42 @@ def clone_delete_blockers(path, protected=None, verify_remote=True):
             blockers.append("branch %s unverifiable vs %s" % (branch, upstream))
         elif cnt not in ("0", ""):
             blockers.append("branch %s has %s unpushed commit(s)" % (branch, cnt))
+
+    # skip-worktree / assume-unchanged suppress a tracked file from status
+    # entirely, so local-only content in it looks like a clean tree.
+    ok, lsf = _git(path, "ls-files", "-v")
+    if ok:
+        masked = [l for l in lsf.splitlines() if l[:1] in ("S", "s", "h")]
+        if masked:
+            blockers.append("%d file(s) hidden by skip-worktree/assume-unchanged"
+                            % len(masked))
+
+    # A submodule's commits live in its own repository; the parent's status
+    # says nothing about them.
+    ok, subs = _git(path, "submodule", "status", "--recursive")
+    if ok and subs.strip():
+        ok2, out2 = _git(
+            path, "submodule", "foreach", "--recursive", "--quiet",
+            "git status --porcelain; git stash list; "
+            "git rev-list --count --all --not --remotes",
+            timeout=60)
+        if not ok2:
+            blockers.append("submodules unverifiable")
+        else:
+            signals = [l for l in (x.strip() for x in out2.splitlines())
+                       if l and l != "0"]
+            if signals:
+                blockers.append("%d submodule signal(s) of local-only work"
+                                % len(signals))
+
+    # Linked worktrees share this clone's object store — deleting the clone
+    # destroys whatever is checked out in them.
+    ok, wt = _git(path, "worktree", "list", "--porcelain")
+    if ok:
+        linked = [l for l in wt.splitlines() if l.startswith("worktree ")][1:]
+        if linked:
+            blockers.append("%d linked worktree(s) depend on this repository"
+                            % len(linked))
 
     # Catches work the per-branch comparison cannot see: commits held only by a
     # tag, by a non-branch ref, or by a detached HEAD.
