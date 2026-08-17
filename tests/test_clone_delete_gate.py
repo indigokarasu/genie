@@ -158,6 +158,70 @@ def main():
         orphan = make_clone(root, "orphan", orphan_origin)
         shutil.rmtree(orphan_origin)
         check("remote repo deleted", genie.clone_delete_blockers(orphan), False, "remote unreachable")
+
+        # 14. GIT_DIR in the environment must not redirect the probes
+        env_victim = make_clone(root, "env-victim", origin)
+        write(env_victim, "f.txt", "hello\nuncommitted\n")
+        os.environ["GIT_DIR"] = os.path.join(clean, ".git")
+        os.environ["GIT_WORK_TREE"] = clean
+        try:
+            check("GIT_DIR cannot redirect probes",
+                  genie.clone_delete_blockers(env_victim), False, "uncommitted")
+        finally:
+            os.environ.pop("GIT_DIR", None)
+            os.environ.pop("GIT_WORK_TREE", None)
+
+        # 15. a repo that hides its own untracked files must still block
+        hidden = make_clone(root, "hidden-untracked", origin)
+        git(hidden, "config", "status.showUntrackedFiles", "no")
+        write(hidden, "only-copy.txt", "never committed anywhere\n")
+        check("status.showUntrackedFiles=no",
+              genie.clone_delete_blockers(hidden), False, "uncommitted")
+
+        # 16. stash whose reflog was expired -> refs/stash still holds the work
+        expired = make_clone(root, "stash-expired", origin)
+        write(expired, "f.txt", "hello\nstashed\n")
+        git(expired, "stash")
+        logs = os.path.join(expired, ".git", "logs")
+        shutil.rmtree(logs, ignore_errors=True)
+        check("stash with expired reflog",
+              genie.clone_delete_blockers(expired), False, "stash")
+
+        # 17. skip-worktree hides a tracked file's local-only content
+        masked = make_clone(root, "skip-worktree", origin)
+        git(masked, "update-index", "--skip-worktree", "f.txt")
+        write(masked, "f.txt", "local-only content\n")
+        check("skip-worktree masked file",
+              genie.clone_delete_blockers(masked), False, "skip-worktree")
+
+        # 18. a submodule holding an unpushed commit
+        sub_origin = os.path.join(root, "sub.git")
+        sh("git", "init", "-q", "--bare", "-b", "main", sub_origin)
+        sub_seed = make_clone(root, "sub-seed", sub_origin)
+        write(sub_seed, "s.txt", "sub\n")
+        git(sub_seed, "add", "-A")
+        git(sub_seed, "commit", "-q", "-m", "init")
+        git(sub_seed, "push", "-q", "-u", "origin", "main")
+        parent = make_clone(root, "with-submodule", origin)
+        sh("git", "-C", parent, "-c", "protocol.file.allow=always",
+           "submodule", "-q", "add", sub_origin, "sub")
+        git(parent, "commit", "-q", "-m", "add submodule")
+        git(parent, "push", "-q")
+        subdir = os.path.join(parent, "sub")
+        sh("git", "-C", subdir, "config", "user.email", "t@example.com")
+        sh("git", "-C", subdir, "config", "user.name", "t")
+        write(subdir, "local.txt", "submodule work that exists only here\n")
+        sh("git", "-C", subdir, "add", "-A")
+        sh("git", "-C", subdir, "commit", "-q", "-m", "sub local")
+        blockers = genie.clone_delete_blockers(parent)
+        check("submodule holds local work", blockers, False)
+
+        # 19. a linked worktree depends on this clone's object store
+        wt_owner = make_clone(root, "worktree-owner", origin)
+        sh("git", "-C", wt_owner, "worktree", "add", "-q",
+           os.path.join(root, "linked-wt"), "-b", "wt-branch")
+        check("linked worktree exists",
+              genie.clone_delete_blockers(wt_owner), False, "worktree")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -165,7 +229,7 @@ def main():
     if FAILURES:
         print("FAILED: %s" % ", ".join(FAILURES))
         return 1
-    print("ALL 13 GATE CASES PASS")
+    print("ALL 19 GATE CASES PASS")
     return 0
 
 
