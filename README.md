@@ -3,7 +3,7 @@
 <img src="./assets/readme/hero.jpg" width="100%" alt="Genie">
 
 **Skill name:** `ocas-genie`
-**Version:** 1.7.1
+**Version:** 1.8.0
 **Type:** workflow
 **Layer:** infrastructure
 **Author:** Indigo Karasu
@@ -53,6 +53,7 @@ auto-deleted).
 | `SKILL.md` | Skill definition, procedure, and known issues |
 | `scripts/genie.py` | The assessment and cleanup engine |
 | `scripts/genie_rebuild_fts.py` | FTS index rebuild helper |
+| `tests/` | Regression tests (clone-deletion safety gate) |
 | `references/` | Operational notes, pitfalls, and worked examples |
 
 ## Documentation

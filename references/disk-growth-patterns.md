@@ -100,3 +100,19 @@ du -sh <hermes-home>/profiles/indigo/*/ 2>/dev/null | sort -rh
 - backup/ : 9.4 GB
 - projects/ : 3.5 GB
 - hermes-agent/ : 2.8 GB
+## Patterns added after the 2026-08-16 audit (85% -> 59% on a 96 GB disk)
+
+| Pattern | Size seen | Tell | Reclaim |
+|---|---|---|---|
+| Git LFS local cache | 12 GB | `.git` dwarfs `git count-objects -vH` size-pack | `git lfs prune --verify-remote` (clean tree, all pushed) |
+| Orphaned interpreter tree | 6.7 GB | a second `/usr/local/lib/pythonX.Y` no shebang or service references | delete after proving no consumer |
+| GPU stack on a GPU-less host | 4.5 GB | `nvidia-*` + `torch` + `triton` present, no GPU | delete; CPU-only torch is a one-line reinstall |
+| Synced-then-deletable checkouts | 2.5 GB | PR/work checkouts whose commits are on the remote | push to a dated branch first, then delete |
+| Fully-pushed mirror clones | 3.2 GB | many clones of repos that also exist elsewhere on the box | delete only via the work-preservation gate |
+| Duplicate model store | 1.7 GB | daemon `HOME` differs from where assets were pulled | merge stores, fix ownership |
+| Aged cron transcripts | 170 MB | thousands of dated dirs under `cron/output` | archive to one tarball |
+
+**Ordering rule:** reclaim in the order *provably-redundant, then orphaned,
+then aged*. Never delete anything whose only copy is local, and check backup
+freshness before touching backup-class data — a stale pipeline means the
+local copy IS the backup.

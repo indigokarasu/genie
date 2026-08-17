@@ -41,6 +41,8 @@ import os
 import re
 import shutil
 import sqlite3
+import subprocess
+import time
 
 # ── Configuration ──────────────────────────────────────────────────────────
 
@@ -115,6 +117,8 @@ FILESYSTEM_MD_PATHS = [
 
 FS_ROOT = os.path.expanduser("~")  # root of user-owned data zones (backups/, projects/)
 
+CFG_FOR_CLONES = None
+
 DEFAULTS = {
     "snapshot_max_age_days": _skill_config("snapshot_max_age_days", 7),
     "log_compress_age_days": _skill_config("log_compress_age_days", 7),
@@ -136,6 +140,13 @@ DEFAULTS = {
     "git_clone_max_age_days": _skill_config("git_clone_max_age_days", 5),
     "git_clones_path": FS_ROOT + "/projects",
     "allow_local_state_db_backup": _skill_config("allow_local_state_db_backup", False),
+    # Deletion is refused for any clone matching these basenames/paths.
+    "git_clones_protected": _skill_config("git_clones_protected", []),
+    # Backup-freshness gate: stamp files (<name>.ok, mtime = last success)
+    # written by the backup pipeline. Missing dir = feature inactive.
+    "backup_stamps_path": _skill_config(
+        "backup_stamps_path", os.path.join(HERMES_HOME, "logs", "stamps")),
+    "backup_stamp_max_age_hours": _skill_config("backup_stamp_max_age_hours", 26),
 }
 
 # Built-in cleanup targets: path → {tier, action, max_age_days, ...}
@@ -249,12 +260,21 @@ def age_hours(path):
     return (datetime.datetime.now().timestamp() - os.path.getmtime(path)) / 3600
 
 
+# A historical artifact carries a date stamp or an archive/backup marker.
+HISTORICAL_NAME = re.compile(
+    r"\d{8}|\d{4}-\d{2}-\d{2}|\.bak[-.]|-pre[a-z]*-|\.tar\.gz$|\.tgz$|\.zip$|\.bundle$",
+    re.I,
+)
+
+
 def historical_backup_candidates(cfg):
     """Return historical backup candidates governed by the one-backup VPS policy.
 
-    Live databases are intentionally excluded. Candidates are backup copies,
-    snapshots, and migration/pre-migration backups that can accumulate alongside
-    live data.
+    Live databases are intentionally excluded, and that exclusion is real:
+    a plain undated FILE sitting directly in a backup root is the current copy
+    maintained by the backup pipeline (e.g. ``chronicle.db``), not a historical
+    backup, so it is never a retention candidate. Candidates are dated backup
+    directories, dated/archived files, snapshots, and migration backups.
     """
     candidates = []
     seen = set()
@@ -299,7 +319,14 @@ def historical_backup_candidates(cfg):
     for base in cfg.get("backup_paths", []):
         if os.path.isdir(base):
             for entry in os.listdir(base):
-                add(os.path.join(base, entry), f"backup:{base}")
+                path = os.path.join(base, entry)
+                # Protect the live copy set: an undated file directly in a
+                # backup root is what the backup pipeline refreshes in place.
+                # Deleting it removes a restore point rather than reclaiming a
+                # stale duplicate. Dated dirs/archives remain candidates.
+                if os.path.isfile(path) and not HISTORICAL_NAME.search(entry):
+                    continue
+                add(path, f"backup:{base}")
 
     snapshots = cfg.get("snapshots_path")
     if snapshots and os.path.isdir(snapshots):
@@ -1061,6 +1088,82 @@ def clean_backup_retention(cfg, dry_run):
     return result
 
 
+def _git(path, *args, timeout=30):
+    """Run git in path. Returns (ok, stdout). ok=False on any failure —
+    callers must treat a failed probe as UNSAFE, never as permission."""
+    try:
+        r = subprocess.run(["git", "-C", path] + list(args),
+                           capture_output=True, text=True, timeout=timeout)
+        return r.returncode == 0, r.stdout.strip()
+    except Exception:
+        return False, ""
+
+
+def clone_delete_blockers(path, protected=None):
+    """Return a list of reasons this clone must NOT be deleted. Empty list =
+    every safety gate passed. Fails CLOSED: an unreadable repo is unsafe.
+
+    Gates (these mirror the documented policy — keep code and docs in sync):
+      * protected path
+      * uncommitted changes in the working tree
+      * stashed work
+      * any local branch with commits not on its upstream
+      * any local branch with no upstream at all (unverifiable)
+    """
+    blockers = []
+    for pat in (protected or []):
+        if pat and (os.path.basename(path) == pat or pat in path):
+            blockers.append("protected path (%s)" % pat)
+    ok, out = _git(path, "status", "--porcelain")
+    if not ok:
+        return blockers + ["git status failed (repo unreadable)"]
+    if out:
+        blockers.append("%d uncommitted change(s)" % len(out.splitlines()))
+    ok, out = _git(path, "stash", "list")
+    if ok and out:
+        blockers.append("%d stash entr(ies)" % len(out.splitlines()))
+    ok, out = _git(path, "for-each-ref", "--format=%(refname:short)\t%(upstream:short)", "refs/heads")
+    if not ok:
+        return blockers + ["cannot enumerate branches"]
+    for line in out.splitlines():
+        parts = line.split("\t")
+        branch = parts[0] if parts else ""
+        upstream = parts[1] if len(parts) > 1 else ""
+        if not branch:
+            continue
+        if not upstream:
+            blockers.append("branch %s has no upstream" % branch)
+            continue
+        ok2, cnt = _git(path, "rev-list", "--count", "%s..%s" % (upstream, branch))
+        if not ok2:
+            blockers.append("branch %s unverifiable vs %s" % (branch, upstream))
+        elif cnt not in ("0", ""):
+            blockers.append("branch %s has %s unpushed commit(s)" % (branch, cnt))
+    return blockers
+
+
+def backup_freshness(cfg):
+    """Read backup success stamps: [(name, age_hours, stale)]. Empty when no
+    stamp directory exists (generic installs without a backup pipeline)."""
+    d = cfg.get("backup_stamps_path") or ""
+    if not d or not os.path.isdir(d):
+        return []
+    try:
+        max_age = float(cfg.get("backup_stamp_max_age_hours", 26))
+    except (TypeError, ValueError):
+        max_age = 26.0
+    out = []
+    for fn in sorted(os.listdir(d)):
+        if not fn.endswith(".ok"):
+            continue
+        try:
+            age = (time.time() - os.path.getmtime(os.path.join(d, fn))) / 3600.0
+        except OSError:
+            continue
+        out.append((fn[:-3], age, age > max_age))
+    return out
+
+
 def clean_git_clones(clones_path, max_age_days, dry_run):
     """Delete git clones that haven't been touched in N days and have a valid remote.
 
@@ -1070,7 +1173,9 @@ def clean_git_clones(clones_path, max_age_days, dry_run):
       3. Haven't been modified (oldest file mtime) in >max_age_days
     """
     result = {"action": "git_clones", "tier": 1, "dirs": 0, "skipped_no_remote": 0,
-              "skipped_recent": 0, "bytes_freed": 0, "errors": []}
+              "skipped_recent": 0, "skipped_unsafe": 0, "unsafe": [],
+              "bytes_freed": 0, "errors": []}
+    protected = (CFG_FOR_CLONES or {}).get("git_clones_protected", [])
     if not os.path.isdir(clones_path):
         return result
 
@@ -1119,6 +1224,15 @@ def clean_git_clones(clones_path, max_age_days, dry_run):
 
         if not has_remote:
             result["skipped_no_remote"] += 1
+            continue
+
+        # Work-preservation gate — NEVER delete a clone holding work that
+        # exists only here. A clone is re-clonable only if it is clean AND
+        # every branch is fully pushed.
+        blockers = clone_delete_blockers(path, protected)
+        if blockers:
+            result["skipped_unsafe"] += 1
+            result["unsafe"].append({"path": path, "blockers": blockers})
             continue
 
         # Safe to delete
@@ -1436,6 +1550,15 @@ def assess(cfg, targets=None):
             else:
                 recent_clones += 1
         lines.append(f"Git clones: {fmt(clones_size)} eligible ({old_clones} inactive >{cfg.get('git_clone_max_age_days', 5)}d, {recent_clones} recent, {no_remote} no-remote)")
+        _bf = backup_freshness(cfg)
+        if _bf:
+            _st = [n for n, _a, s2 in _bf if s2]
+            if _st:
+                lines.append("Backup freshness: STALE — " + ", ".join(
+                    f"{n} {a:.0f}h" for n, a, s2 in _bf if s2)
+                    + "  (backup-class cleanup will be refused)")
+            else:
+                lines.append("Backup freshness: all %d backup path(s) fresh" % len(_bf))
 
     # State DB
     dbp = cfg["state_db_path"]
@@ -1489,7 +1612,17 @@ def clean(cfg):
                                      cfg["cron_output_compress_age_days"], cfg["dry_run"]))
 
     # Historical backups — count-based retention, keep newest valid candidate.
-    results.append(clean_backup_retention(cfg, cfg["dry_run"]))
+    _fresh = backup_freshness(cfg)
+    _stale = [n for n, _a, st in _fresh if st]
+    if _stale:
+        # Refuse to thin historical backups while the pipeline that creates
+        # the offsite copies is itself stale — that is exactly when the
+        # local copy is the only copy.
+        results.append({"action": "backup_retention", "tier": 1, "dirs": 0,
+                        "bytes_freed": 0,
+                        "errors": ["SKIPPED: stale backup paths (%s)" % ", ".join(_stale)]})
+    else:
+        results.append(clean_backup_retention(cfg, cfg["dry_run"]))
 
     # /tmp
     if cfg.get("tmp_stale_hours", 0) > 0:
@@ -1498,6 +1631,7 @@ def clean(cfg):
     # Git clones (inactive, confirmed remote)
     git_clones_path = cfg.get("git_clones_path", FS_ROOT + "/projects")
     if os.path.isdir(git_clones_path):
+        globals()["CFG_FOR_CLONES"] = cfg
         results.append(clean_git_clones(git_clones_path, cfg["git_clone_max_age_days"], cfg["dry_run"]))
 
     # Package caches

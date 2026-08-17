@@ -1,7 +1,7 @@
 ---
 name: ocas-genie
 description: Safely audits and reclaims VPS/Linux disk space, investigates root-filesystem growth, and enforces backup retention when disk usage is high or maintenance is requested; use keywords disk cleanup, disk full, disk usage, snapshots, backups, stale repos, or disk spike. NOT for database maintenance beyond read-only analysis, logrotate configuration, or real-time monitoring.
-version: 1.7.1
+version: 1.8.0
 author: Indigo Karasu (indigokarasu)
 license: MIT
 platforms: [linux]
@@ -162,6 +162,8 @@ Some large disk consumers require an audit pass before cleanup because they may 
 6. **Browser caches** (`~/.cache/camoufox/`) — safe to delete when no creating process is running.
 7. **Stale /tmp extracts** (`/tmp/camoufox-*/`, `/tmp/uc_*/`, `/tmp/body_*`) — safe to delete when no creating process is running.
 8. **state.db VACUUM** — Genie does not run `VACUUM` automatically. As of v1.7.x the default `--assess` (and `--clean`/`--discover`) pass reads `PRAGMA page_count`/`page_size`/`freelist_count` and prints `live_bytes`, `bloat_bytes`, `bloat_pct`, and whether a classic `VACUUM` (which duplicates the file inline → needs ~`live_bytes` free on top of the original) would fit. **Decision rule: if `bloat_pct` < ~5%, do NOT VACUUM — the file is mostly real data; reclaim via caches/tmp/repos instead.** Most live agent DBs sit at 0.5–2.4% bloat. See `references/state-db-vacuum-feasibility.md`. A 2.5 GB+ uncheckpointed WAL is itself abnormal — flag the missing checkpoint separately; do not attribute it to bloat.
+10. **Orphaned language-runtime trees** — a second interpreter tree (e.g. `/usr/local/lib/python3.13` alongside a system 3.14) can hold GB nothing imports; a CUDA/GPU stack (`torch`, `triton`, `nvidia-*` ≈ 4.5 GB) on a GPU-less VPS is pure dead weight. Prove orphanhood before deleting: no shebang, cron entry, service venv, or script references it.
+11. **Duplicate model/asset stores** — a daemon whose systemd unit sets its own `HOME` (e.g. `HOME=/usr/share/ollama`) cannot see assets pulled into another home, so the box carries two stores *and* the service is silently missing its model. Compare both, merge, fix ownership — do not delete blindly.
 9. **Git LFS caches** — a fully-pushed repo can hide many GB in `.git/lfs` (local copies of objects the LFS server already holds). Check with `du -sh <repo>/.git/lfs` whenever a repo's `.git` dwarfs its `git count-objects -vH` size-pack. Reclaim with `git lfs prune --verify-remote` (dry-run first; it verifies each object exists on the remote before deleting). Precondition: clean tree, no unpushed commits. 2026-08-16: indigo-repo `.git/lfs` 12 GB → 767 MB.
 
 When disk is critically high, flag these in the report even if `--clean` cannot auto-clean them.
@@ -174,10 +176,11 @@ When disk is critically high, flag these in the report even if `--clean` cannot 
 - ALWAYS report what was done
 - If disk usage is below 50%, report "no action needed"
 - If any operation fails, report the error and continue
+- **Backup-freshness gate (v1.8.0):** when `backup_stamps_path` exists (default `<hermes-home>/logs/stamps`, holding `<name>.ok` files whose mtime marks each backup path's last success), genie **refuses backup-class cleanup while any path is stale** (older than `backup_stamp_max_age_hours`, default 26). The moment the offsite pipeline stops is precisely when the local copy becomes the only copy. `--assess` prints a `Backup freshness:` line; a generic install with no stamp directory is unaffected.
 - If a snapshot deletion fails, leave the snapshot in place and report at the end
 - The most recent snapshot is always preserved (never auto-deleted) — **NOTE: this is currently undermined by `backup_retention` (see Known Issues); verify the snapshot dir survived after every `--clean`, do not assume it from the summary line.**
 - **Do not preserve multiple backups**: The VPS policy is one historical backup plus current live data. Count all historical backup classes together (`<fs-root>/backup`, `<backups-root>`, snapshots, migration backups, `.bak-*`) and report/remove older valid copies.
-- **Repo deletion guard (when user authorizes "delete cloned repos"):** do NOT blindly `rm` every clone. Classify first and only delete repos that are ALL of: (a) **clean** (`git status --porcelain` = 0), (b) **have a remote** (`git remote get-url origin` exists — re-clonable), (c) **untouched > `git_clone_max_age_days`** (default 5), (d) **not the active working dir or a protected skill-source tree** (e.g. `indigokarasu-site-commons/*`, `<operator-site>`, in-progress projects). Explicitly skip any repo with uncommitted work or unpushed commits on a no-upstream / feature branch (`git rev-list --count @{u}..HEAD` > 0, or `ahead=?`) — deleting those is data loss, not cleanup. Report the held-back set so the user can decide.
+- **Repo deletion guard — ENFORCED IN CODE as of v1.8.0** (`clone_delete_blockers()`; it was documented-only before, and the gap destroyed a clone on a production box — see `references/clone-deletion-safety.md`). A clone is deletable only when ALL hold: (a) working tree **clean**, (b) **no stashes**, (c) **every local branch fully pushed** to a configured upstream — a branch with no upstream is unverifiable and therefore blocking, (d) has a **remote** (re-clonable), (e) untouched > `git_clone_max_age_days` (default 5), (f) not matched by `git_clones_protected` (config: site-source trees, in-progress projects, the operator's own site repo). The probe **fails closed** — an unreadable repo is never deleted. Blocked clones are counted as `skipped_unsafe` and reported with their reasons. Regression test: `tests/test_clone_delete_gate.py` (7 cases). The manual playbook remains in `references/manual-repo-pruning.md`.
 
 ## Known Issues / Pitfalls
 
@@ -199,6 +202,9 @@ When re-investigating disk spikes from backup copies, the **live writer is `back
 
 ### Publishing a genie.py change when the remote was force-updated (2026-07-26)
 The live skill dir `~/.hermes/profiles/indigo/skills/ocas-genie` IS its own git repo (remote `indigokarasu/genie`). The daily `skill-sync-all` cron can clobber unpushed edits, so PUSH FROM THE LOCAL SKILL REPO, never a `/tmp` clone. If `git push` is rejected because the remote advanced (and `fetch` shows `(forced update)`): a plain `rebase origin/main` may hit CONFLICT in `references/*.md` (their PII-sanitize/beautify commits) — these are doc-only and unrelated to `genie.py`. Resolve by `git checkout --theirs -- references/` then `git rebase --skip` for each conflicting doc commit; your `genie.py` commit (separate file) will apply cleanly on top. Then non-force push. Do NOT `--force` push (could clobber remote work). After push, verify `git rev-list --count HEAD..origin/main` = 0. If an unrelated uncommitted edit (e.g. README) is present, stash it before rebasing and do not bundle it into your commit.
+
+### A retention line pointing at a nonexistent path is a silent no-op (2026-08-16)
+A nightly prune ran `git -C <fs-root>/indigo lfs prune` for two months — but the repository is `<fs-root>/indigo-repo`. `git -C` on a non-repo fails quietly, and the line was wrapped in `>/dev/null 2>&1`, so the job reported success daily while the LFS cache grew to 12 GB and filled the disk. **Verify every retention target resolves** before trusting the line (`[ -d "$P/.git" ] || echo MISSING`), and prefer loud failure to silent success. Same family as the placeholder-token defect: code that runs, and does nothing.
 
 ## Error Handling
 
