@@ -2,6 +2,37 @@
 
 All notable changes to the genie skill are documented here.
 
+## [1.8.1] - 2026-08-16
+
+An adversarial audit of the 1.8.0 safety work reproduced six further paths to
+data loss — three of them introduced by 1.8.0 itself. All are closed and
+covered by tests (13 gate cases, 18 retention assertions).
+
+### Fixed
+- **Remote-tracking refs were trusted as proof of "pushed".**
+  `rev-list <upstream>..<branch>` compares against a LOCAL cache, so a branch
+  deleted upstream — or a remote repository that no longer exists — read as
+  fully pushed and the only copy was deleted. The remote is now contacted
+  (`git ls-remote`; `git_clones_verify_remote`, default true) and every
+  upstream must still exist on it.
+- **Git-ignored files were invisible.** A clone whose only copy of `.env` or
+  `data/` was ignored had an empty blocker list. Ignored paths now block,
+  minus a rebuildable allowlist (`node_modules`, `__pycache__`, build output).
+- **Commits held only by a tag** (or any non-branch ref) were missed by the
+  per-branch comparison; `rev-list --all --not --remotes` now covers branches,
+  tags and detached HEAD together.
+- **Live-copy protection did not apply to directories** — scoping it to files
+  left every undated live directory (`current/`) an unconditional deletion
+  candidate. The name rule now governs both.
+- **Symlinks in a backup root were followed**, double-counting the target and
+  letting retention keep the link while deleting the real backup, leaving a
+  dangling link and reporting success. Symlinks are never candidates.
+- **"Any eight digits" was treated as a date**, stripping live-copy protection
+  from names like `invoice-90210347.pdf` or `chronicle.db.1755300000`. A real
+  calendar date (or an explicit backup marker) is now required.
+- **Retention could empty its keep-list** when every candidate was classed
+  invalid, reclaiming the entire set. It now always retains the newest.
+
 ## [1.8.0] - 2026-08-16
 
 ### Fixed

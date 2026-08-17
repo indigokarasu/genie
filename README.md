@@ -3,7 +3,7 @@
 <img src="./assets/readme/hero.jpg" width="100%" alt="Genie">
 
 **Skill name:** `ocas-genie`
-**Version:** 1.8.0
+**Version:** 1.8.1
 **Type:** workflow
 **Layer:** infrastructure
 **Author:** Indigo Karasu
