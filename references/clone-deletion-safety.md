@@ -55,3 +55,26 @@ fail-closed and protected-path paths).
 
 If a clone cannot pass these, it is not cleanup — it is deletion of the only
 copy. Report it and let the owner decide.
+
+## What an adversarial audit found in the fix (2026-08-16)
+
+Three independent reviewers attacked the v1.8.0 gates by building real
+repositories and calling the functions, then each finding was handed to a
+separate reviewer whose job was to refute it. Six survived — **three of them
+created by the fix itself**, which is the point: a safety change deserves the
+same adversarial treatment as the bug it repairs.
+
+| Hole | Why the gate missed it |
+|---|---|
+| branch deleted upstream; remote repo deleted | `rev-list <upstream>..<branch>` reads refs/remotes, a local cache — the remote is never contacted |
+| `.env` / `data/` git-ignored | `git status --porcelain` hides ignored paths by design |
+| commit held only by a tag | the per-branch loop enumerates refs/heads only |
+| undated live directory in a backup root | live-copy protection was scoped to `os.path.isfile` |
+| `latest -> 2026-08-16` symlink | every probe followed the link; retention kept the link, deleted the target |
+| `invoice-90210347.pdf` | `\d{8}` matched any eight digits, so account and epoch numbers looked like dates |
+
+**Method worth reusing.** Give each reviewer a distinct lens (exotic git state,
+environment/config, regex edges), require an executed reproduction rather than
+a hypothesis, then have a *different* reviewer try to refute each claim. Two
+claims were correctly refuted this way — an under-deletion complaint and a
+by-design archive rule — which is what keeps the confirmed set trustworthy.

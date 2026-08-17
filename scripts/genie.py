@@ -142,6 +142,9 @@ DEFAULTS = {
     "allow_local_state_db_backup": _skill_config("allow_local_state_db_backup", False),
     # Deletion is refused for any clone matching these basenames/paths.
     "git_clones_protected": _skill_config("git_clones_protected", []),
+    # Contact the remote before deleting a clone. Disable only where the
+    # network is unavailable — it is the only proof the remote still has it.
+    "git_clones_verify_remote": _skill_config("git_clones_verify_remote", True),
     # Backup-freshness gate: stamp files (<name>.ok, mtime = last success)
     # written by the backup pipeline. Missing dir = feature inactive.
     "backup_stamps_path": _skill_config(
@@ -262,7 +265,12 @@ def age_hours(path):
 
 # A historical artifact carries a date stamp or an archive/backup marker.
 HISTORICAL_NAME = re.compile(
-    r"\d{8}|\d{4}-\d{2}-\d{2}|\.bak[-.]|-pre[a-z]*-|\.tar\.gz$|\.tgz$|\.zip$|\.bundle$",
+    # A real calendar date (19xx/20xx + valid month + valid day, optionally
+    # separated) or an explicit backup marker. Deliberately NOT "any 8 digits":
+    # account numbers, phone numbers and epoch stamps are not dates, and
+    # treating them as such strips live-copy protection.
+    r"(?:19|20)\d{2}[-_.]?(?:0[1-9]|1[0-2])[-_.]?(?:0[1-9]|[12]\d|3[01])"
+    r"|\.bak\b|\.bak[-._]|-pre[a-z]*-|\.old\b|\.orig\b",
     re.I,
 )
 
@@ -301,6 +309,11 @@ def historical_backup_candidates(cfg):
     def add(path, kind):
         if not path or path in seen or not os.path.exists(path):
             return
+        if os.path.islink(path):
+            # Following a link double-counts its target and lets retention
+            # "keep" the link while deleting the real directory it points at,
+            # leaving a dangling link and no backup.
+            return
         seen.add(path)
         try:
             size = du(path)
@@ -320,11 +333,14 @@ def historical_backup_candidates(cfg):
         if os.path.isdir(base):
             for entry in os.listdir(base):
                 path = os.path.join(base, entry)
-                # Protect the live copy set: an undated file directly in a
-                # backup root is what the backup pipeline refreshes in place.
+                # Protect the live copy set: an entry in a backup root whose
+                # NAME carries no date or backup marker is what the pipeline
+                # refreshes in place (chronicle.db, current/, mempalace.tar.gz).
                 # Deleting it removes a restore point rather than reclaiming a
-                # stale duplicate. Dated dirs/archives remain candidates.
-                if os.path.isfile(path) and not HISTORICAL_NAME.search(entry):
+                # stale duplicate. This governs directories as well as files —
+                # scoping it to files made every undated live directory an
+                # unconditional deletion candidate.
+                if not HISTORICAL_NAME.search(entry):
                     continue
                 add(path, f"backup:{base}")
 
@@ -384,6 +400,12 @@ def backup_retention_plan(cfg):
     keep_count = max(1, int(cfg.get("historical_backup_keep_count", 1)))
     keep = valid[:keep_count]
     reclaim = invalid + valid[keep_count:]
+    if not keep and reclaim:
+        # Every candidate was classed invalid (e.g. all are local state.db
+        # copies). Reclaiming the whole set would leave no historical backup at
+        # all, so retain the newest and reclaim the rest.
+        keep = [reclaim.pop(0)]
+        keep[0].pop("invalid_reason", None)
     return {
         "action": "backup_retention",
         "tier": 1,
@@ -1099,7 +1121,18 @@ def _git(path, *args, timeout=30):
         return False, ""
 
 
-def clone_delete_blockers(path, protected=None):
+# Ignored paths that are genuinely rebuildable. Anything else that is
+# git-ignored (.env, data/, local databases) may be the only copy in existence.
+IGNORED_DISPOSABLE = {
+    "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".next",
+    ".nuxt", "target", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox",
+    ".gradle", ".turbo", ".parcel-cache", "coverage", ".DS_Store", ".idea",
+    ".vscode", ".terraform", ".sass-cache", ".cache",
+}
+IGNORED_DISPOSABLE_SUFFIX = (".pyc", ".pyo", ".log", ".o", ".class", ".lock")
+
+
+def clone_delete_blockers(path, protected=None, verify_remote=True):
     """Return a list of reasons this clone must NOT be deleted. Empty list =
     every safety gate passed. Fails CLOSED: an unreadable repo is unsafe.
 
@@ -1114,11 +1147,25 @@ def clone_delete_blockers(path, protected=None):
     for pat in (protected or []):
         if pat and (os.path.basename(path) == pat or pat in path):
             blockers.append("protected path (%s)" % pat)
-    ok, out = _git(path, "status", "--porcelain")
+    ok, out = _git(path, "status", "--porcelain", "--ignored")
     if not ok:
         return blockers + ["git status failed (repo unreadable)"]
-    if out:
-        blockers.append("%d uncommitted change(s)" % len(out.splitlines()))
+    dirty, ignored = [], []
+    for line in out.splitlines():
+        if line.startswith("!! "):
+            ignored.append(line[3:].strip())
+        elif line.strip():
+            dirty.append(line)
+    if dirty:
+        blockers.append("%d uncommitted change(s)" % len(dirty))
+    precious = [
+        e for e in ignored
+        if e.strip("/").split("/")[0] not in IGNORED_DISPOSABLE
+        and not e.endswith(IGNORED_DISPOSABLE_SUFFIX)
+    ]
+    if precious:
+        blockers.append("%d git-ignored path(s) exist only here (e.g. %s)"
+                        % (len(precious), ", ".join(sorted(precious)[:3])))
     ok, out = _git(path, "stash", "list")
     if ok and out:
         blockers.append("%d stash entr(ies)" % len(out.splitlines()))
@@ -1132,6 +1179,7 @@ def clone_delete_blockers(path, protected=None):
     ok, out = _git(path, "for-each-ref", "--format=%(refname:short)\t%(upstream:short)", "refs/heads")
     if not ok:
         return blockers + ["cannot enumerate branches"]
+    upstreams = []
     for line in out.splitlines():
         parts = line.split("\t")
         branch = parts[0] if parts else ""
@@ -1141,11 +1189,37 @@ def clone_delete_blockers(path, protected=None):
         if not upstream:
             blockers.append("branch %s has no upstream" % branch)
             continue
+        upstreams.append((branch, upstream))
         ok2, cnt = _git(path, "rev-list", "--count", "%s..%s" % (upstream, branch))
         if not ok2:
             blockers.append("branch %s unverifiable vs %s" % (branch, upstream))
         elif cnt not in ("0", ""):
             blockers.append("branch %s has %s unpushed commit(s)" % (branch, cnt))
+
+    # Catches work the per-branch comparison cannot see: commits held only by a
+    # tag, by a non-branch ref, or by a detached HEAD.
+    ok, cnt = _git(path, "rev-list", "--all", "--not", "--remotes", "--count")
+    if not ok:
+        blockers.append("cannot enumerate local commits")
+    elif cnt not in ("0", ""):
+        blockers.append("%s commit(s) reachable from no remote-tracking ref" % cnt)
+
+    if verify_remote:
+        # Remote-tracking refs are a local cache: "not ahead of origin/main"
+        # says nothing about whether the remote still HAS origin/main. Ask it.
+        ok, ls = _git(path, "ls-remote", "--heads", "--tags", "origin", timeout=25)
+        if not ok:
+            blockers.append("remote unreachable — cannot confirm it still holds this work")
+        else:
+            remote_refs = set()
+            for line in ls.splitlines():
+                parts = line.split("\t")
+                if len(parts) == 2:
+                    remote_refs.add(parts[1].strip())
+            for branch, upstream in upstreams:
+                short = upstream.split("/", 1)[1] if "/" in upstream else upstream
+                if "refs/heads/" + short not in remote_refs:
+                    blockers.append("upstream %s no longer exists on the remote" % upstream)
     return blockers
 
 
@@ -1236,7 +1310,9 @@ def clean_git_clones(clones_path, max_age_days, dry_run):
         # Work-preservation gate — NEVER delete a clone holding work that
         # exists only here. A clone is re-clonable only if it is clean AND
         # every branch is fully pushed.
-        blockers = clone_delete_blockers(path, protected)
+        blockers = clone_delete_blockers(
+            path, protected,
+            verify_remote=(CFG_FOR_CLONES or {}).get("git_clones_verify_remote", True))
         if blockers:
             result["skipped_unsafe"] += 1
             result["unsafe"].append({"path": path, "blockers": blockers})
