@@ -100,6 +100,15 @@ def main():
 
         # 7. protected path -> blocked even when clean
         check("protected path", genie.clone_delete_blockers(clean, ["clean"]), False, "protected")
+
+        # 8. detached HEAD with a local commit -> blocked (no branch holds it)
+        detached = make_clone(root, "detached", origin)
+        git(detached, "checkout", "-q", "--detach")
+        with open(os.path.join(detached, "detached.txt"), "w") as fh:
+            fh.write("work reachable from no branch\n")
+        git(detached, "add", "detached.txt")
+        git(detached, "commit", "-q", "-m", "detached work")
+        check("detached HEAD", genie.clone_delete_blockers(detached), False, "detached")
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
@@ -107,7 +116,7 @@ def main():
     if FAILURES:
         print("FAILED: %s" % ", ".join(FAILURES))
         return 1
-    print("ALL 7 GATE CASES PASS")
+    print("ALL 8 GATE CASES PASS")
     return 0
 
 

@@ -1122,6 +1122,13 @@ def clone_delete_blockers(path, protected=None):
     ok, out = _git(path, "stash", "list")
     if ok and out:
         blockers.append("%d stash entr(ies)" % len(out.splitlines()))
+    ok, head = _git(path, "rev-parse", "--abbrev-ref", "HEAD")
+    if not ok:
+        return blockers + ["cannot read HEAD"]
+    if head == "HEAD":
+        # Detached: commits here belong to no branch, so the per-branch
+        # upstream comparison below cannot see them.
+        blockers.append("detached HEAD (commits may be unreachable from any branch)")
     ok, out = _git(path, "for-each-ref", "--format=%(refname:short)\t%(upstream:short)", "refs/heads")
     if not ok:
         return blockers + ["cannot enumerate branches"]
