@@ -10,6 +10,9 @@ All notable changes to the genie skill are documented here.
   changes, stashes, or unpushed commits — although those gates were already
   documented in `SKILL.md`. The gate is now enforced in code by
   `clone_delete_blockers()`, which fails closed on any unreadable repo.
+  Blocking conditions: dirty tree, stashes, unpushed commits, a branch with
+  no upstream, detached HEAD (commits reachable from no branch), protected
+  paths, and any failed probe.
   See `references/clone-deletion-safety.md`.
 - Removed an operator-identifying hostname from an example in `SKILL.md`
   (protected paths are now expressed generically and configured via
