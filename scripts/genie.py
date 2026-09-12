@@ -150,6 +150,11 @@ DEFAULTS = {
     "backup_stamps_path": _skill_config(
         "backup_stamps_path", os.path.join(HERMES_HOME, "logs", "stamps")),
     "backup_stamp_max_age_hours": _skill_config("backup_stamp_max_age_hours", 26),
+    # Verification-only stamps (e.g. a weekly integrity check or a monthly
+    # restore drill) run on schedules whose period exceeds max_age_hours by
+    # design. They must not block offsite-production reclamation; the gate
+    # exists to protect the live copy while the PRODUCTION copy is stale.
+    "backup_stamp_ignore": _skill_config("backup_stamp_ignore", []),
 }
 
 # Built-in cleanup targets: path → {tier, action, max_age_days, ...}
@@ -1295,7 +1300,13 @@ def clone_delete_blockers(path, protected=None, verify_remote=True):
 
 def backup_freshness(cfg):
     """Read backup success stamps: [(name, age_hours, stale)]. Empty when no
-    stamp directory exists (generic installs without a backup pipeline)."""
+    stamp directory exists (generic installs without a backup pipeline).
+
+    Stamps listed in `backup_stamp_ignore` are still reported (name, age) but
+    never flagged stale — they run on longer schedules (weekly integrity
+    check, monthly restore drill) and must not block reclamation of the live
+    offsite-production copy.
+    """
     d = cfg.get("backup_stamps_path") or ""
     if not d or not os.path.isdir(d):
         return []
@@ -1303,6 +1314,7 @@ def backup_freshness(cfg):
         max_age = float(cfg.get("backup_stamp_max_age_hours", 26))
     except (TypeError, ValueError):
         max_age = 26.0
+    ignore = set(cfg.get("backup_stamp_ignore") or [])
     out = []
     for fn in sorted(os.listdir(d)):
         if not fn.endswith(".ok"):
@@ -1311,7 +1323,8 @@ def backup_freshness(cfg):
             age = (time.time() - os.path.getmtime(os.path.join(d, fn))) / 3600.0
         except OSError:
             continue
-        out.append((fn[:-3], age, age > max_age))
+        name = fn[:-3]
+        out.append((name, age, age > max_age and name not in ignore))
     return out
 
 
