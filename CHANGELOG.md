@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.9.0] - 2026-09-16
+
+### Changed
+- **Config migration confirmed/documented** — all behavioral settings resolved via `skills.config.genie.*` from config.yaml (`_skill_config()` with type coercion); legacy `GENIE_*` env-var references purged from docs (stale doc note updated in `references/genie-gotchas.md`). Env vars reserved strictly for credentials/identity (`HERMES_HOME`, `HERMES_PROFILE`) per `spec-ocas-skill-improvements.md`.
+
+
 All notable changes to the genie skill are documented here.
 
 ## [1.8.2] - 2026-08-16
