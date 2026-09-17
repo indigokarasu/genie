@@ -1,7 +1,7 @@
 ---
 name: ocas-genie
 description: Safely audits and reclaims VPS/Linux disk space, investigates root-filesystem growth, and enforces backup retention when disk usage is high or maintenance is requested; use keywords disk cleanup, disk full, disk usage, snapshots, backups, stale repos, or disk spike. NOT for database maintenance beyond read-only analysis, logrotate configuration, or real-time monitoring.
-version: 1.8.2
+version: "1.9.0"
 author: Indigo Karasu (indigokarasu)
 license: MIT
 platforms: [linux]
