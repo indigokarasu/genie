@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased] - 2026-09-22
+
+### Fixed
+- **Retention pooled unrelated `.bak-*` copies into one global slot.** The
+  keep-list was bucketed by candidate *kind*, and `db-bak` / `migration-backup`
+  are a single kind spanning the whole profiles and migrations trees — so the
+  newest `*.bak-*` file anywhere under `profiles/` reclaimed every other
+  directory's only copy. (Backup-root kinds embed their root, so those were
+  already correct; SKILL.md has always documented retention as "per class and
+  root".) Candidates now carry a `group` of class + owning directory, and
+  retention buckets on that. Verified on the live box: the pre-fix plan
+  reclaimed `profiles/indigo/scripts/federation_refresh.sh.bak-deadline-*`,
+  the only copy of that script, because an unrelated ocas-finch task-list
+  backup was newer. Post-fix only the genuine same-directory duplicate is
+  reclaimed.
+- **The candidate walk could not be scoped.** `historical_backup_candidates()`
+  read `$HERMES_HOME/migrations` and `$HERMES_HOME/profiles` from hardcoded
+  paths whatever cfg it was given, while `backup_paths` and `snapshots_path`
+  came from cfg. They are now `migrations_path` / `profiles_path` in cfg,
+  defaulting to the same live locations (production scope unchanged, confirmed
+  by an A/B of the live plan: identical candidate set).
+
+### Tests
+- `tests/test_backup_retention_scope.py` pinned all four scan roots at its
+  fixtures. Three cases had been failing since the first `*.bak-*` file was
+  written under `profiles/` — the suite was asserting against the live box, and
+  the leak also let "all-invalid: keeps one anyway" pass while keeping a real
+  file instead of the fixture it was written to check.
+- Added: cfg-driven scan roots; all-invalid keeps the *newest*; unrelated
+  `.bak-` directories keep their own; same-directory `.bak-` history is still
+  thinned; unrelated migration backups keep their own.
+  directive, and removed from genie's live-copy list).
+
 ## [1.9.0] - 2026-09-16
 
 ### Changed

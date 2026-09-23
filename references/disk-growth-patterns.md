@@ -19,7 +19,7 @@ rm -rf <hermes-home>/state-snapshots/20260620-XXXXXX-pre-update/  # old one
 
 ## <fs-root>/backup/
 
-Manually created backups in `<fs-root>/backup/YYYYMMDD_HHMMSS/` follow the same pattern: state.db dominates. On June 24 the backup was 9.4 GB (9.0 GB state.db + 253 MB chroma.sqlite3 + smaller DBs).
+Manually created backups in `<fs-root>/backup/YYYYMMDD_HHMMSS/` follow the same pattern: state.db dominates. On June 24 the backup was 9.4 GB (9.0 GB state.db + 253 MB the vector store + smaller DBs).
 
 **These are separate from state-snapshots/** and from genie's retention. Ask the user before deleting — they may want to keep one historical restore point.
 

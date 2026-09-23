@@ -161,7 +161,6 @@ Some large disk consumers require an audit pass before cleanup because they may 
 5. **Duplicate git repos** — compare remote + HEAD before removing. Same remote and same HEAD = duplicate candidate.
 6. **Browser caches** (`~/.cache/camoufox/`) — safe to delete when no creating process is running.
 7. **Stale /tmp extracts** (`/tmp/camoufox-*/`, `/tmp/uc_*/`, `/tmp/body_*`) — safe to delete when no creating process is running.
-8. **Retention is per class and root, newest-first.** Candidates are grouped by kind/root so two backup roots can never delete each other's only copy, and recency selects the survivor — completeness (`backup_score`) only *adds* a rescue keep, it never outranks mtime, which is how a 19-month-old copy once outranked today's. An entry whose NAME carries no calendar date or backup marker is the live copy the pipeline refreshes in place (`chronicle.db`, `current/`, `mempalace.tar.gz`) and is never a retention candidate; this covers directories as well as files. Symlinks are skipped entirely — following one lets retention "keep" the link while deleting the directory it points at. "Any eight digits" is not a date: account numbers, phone numbers and epoch stamps must not strip that protection.
 8. **state.db VACUUM** — Genie does not run `VACUUM` automatically. As of v1.7.x the default `--assess` (and `--clean`/`--discover`) pass reads `PRAGMA page_count`/`page_size`/`freelist_count` and prints `live_bytes`, `bloat_bytes`, `bloat_pct`, and whether a classic `VACUUM` (which duplicates the file inline → needs ~`live_bytes` free on top of the original) would fit. **Decision rule: if `bloat_pct` < ~5%, do NOT VACUUM — the file is mostly real data; reclaim via caches/tmp/repos instead.** Most live agent DBs sit at 0.5–2.4% bloat. See `references/state-db-vacuum-feasibility.md`. A 2.5 GB+ uncheckpointed WAL is itself abnormal — flag the missing checkpoint separately; do not attribute it to bloat.
 10. **Orphaned language-runtime trees** — a second interpreter tree (e.g. `/usr/local/lib/python3.13` alongside a system 3.14) can hold GB nothing imports; a CUDA/GPU stack (`torch`, `triton`, `nvidia-*` ≈ 4.5 GB) on a GPU-less VPS is pure dead weight. Prove orphanhood before deleting: no shebang, cron entry, service venv, or script references it.
 11. **Duplicate model/asset stores** — a daemon whose systemd unit sets its own `HOME` (e.g. `HOME=/usr/share/ollama`) cannot see assets pulled into another home, so the box carries two stores *and* the service is silently missing its model. Compare both, merge, fix ownership — do not delete blindly.
@@ -284,7 +283,7 @@ Any setting not present falls back to the built-in default shown below.
 | `references/genie-gotchas.md` | Before first production run or when debugging |
 | `references/operational-notes.md` | Real-world examples and case studies |
 | `references/os-walk-pitfall.md` | Debugging nested directory traversal issues |
-| `references/session-2026-05-29-disk-recovery.md` | Disk emergency case study |
+| `.archive/session-logs-export/session-2026-05-29-disk-recovery.md` | Disk emergency case study |
 | `references/snapshot-backup-redaction.md` | Backing up snapshots to git/LFS |
 | `references/snapshot-structures.md` | Snapshot format breakdown |
 | `references/state-db-compaction.md` | Tackling state.db bloat |
@@ -298,3 +297,9 @@ Any setting not present falls back to the built-in default shown below.
 | `scripts/genie.py` | Main cleanup script |
 | `scripts/genie_rebuild_fts.py` | FTS rebuild after restoring no-FTS backup |
 | `references/genie-snapshot-retention-bug.md` | CONFIRMED bug: backup_retention deletes the most-recent rollback snapshot; post-clean verification recipe; Plaid-source vs Styx DB distinction |
+
+## Support Files
+
+- `references/default-config-genie.md` — Genie — Default Config
+- `references/genie-storage-layout.md` — Genie Storage Layout
+- `references/okrs-genie.md` — Genie — OKRs

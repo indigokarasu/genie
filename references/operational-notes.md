@@ -116,7 +116,7 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 3. **Script path gotcha confirmed**: The skill's documented path (`<hermes-home>/profiles/indigo/skills/genie/scripts/genie.py`) does NOT match reality (`ocas-genie/` prefix). Patched in this session.
 
 ### Remaining Concerns
-- `<fs-root>/backup/`: 9.4 GB single directory from June 2026-06-24 (chroma.sqlite3 + chronicle.lbug) — manual review needed
+- `<fs-root>/backup/`: 9.4 GB single directory from June 2026-06-24 (the vector store + chronicle.lbug) — manual review needed
 - `/tmp/`: 150 MB stale files (cleanup blocked by user consent gate)
 - hermes images/cache: small, blocked by user consent gate
 
@@ -135,7 +135,6 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 
 | Target | Space | Type |
 |--------|-------|------|
-| `backups/20260616_000523/` | 5.5G | Old full backup (state.db + chroma + mempalace.tar.gz) |
 | `backups/chronicle-pre-stage2-db-20260619.db` | 3.5G | Duplicate of live chronicle.db |
 | `commons/db/chronicle/chronicle.pre-cleanup-20260620.db` | 3.5G | Duplicate chronicle backup inside commons |
 | `backups/braun-build-sources/` | 427M | Build clones, skills already installed |
@@ -145,7 +144,6 @@ Omit `repeat` entirely — it defaults to forever. Do NOT create one-shot timest
 | `backups/braun-initial-skills-clone/` | 15M | Already extracted |
 | `backups/braun-sprawl/` | 2.6M | Old setup artifact |
 | Old hermes backup dirs (7 dirs) | ~30M | Previous cleanup leftovers |
-| `indigo-repo/data/mempalace.tar.gz` | 130M | Duplicate of live chroma DB |
 | Misc (styx.db, chron_code.tgz, logs) | ~1M | Duplicates / leftovers |
 
 ### Key Learnings

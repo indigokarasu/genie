@@ -55,7 +55,7 @@ Find all historical backup candidates and enforce the one-backup rule.
 find <fs-root>/backup <fs-root>/backups <hermes-home>/state-snapshots <hermes-home>/migrations -xdev -mindepth 1 -maxdepth 4 \
   \( -type f -o -type d \) -printf '%TY-%Tm-%Td %TH:%TM %s %p\n' 2>/dev/null | sort -r | head -200
 
-find /root -xdev \( -name 'state.db*' -o -name 'chronicle.db*' -o -name 'chroma.sqlite3*' -o -name '*.bak-*' \) \
+find /root -xdev \( -name 'state.db*' -o -name 'chronicle.db*' -o -name 'the vector store*' -o -name '*.bak-*' \) \
   -printf '%TY-%Tm-%Td %TH:%TM %s %p -> %l\n' 2>/dev/null | sort -r | head -200
 ```
 
@@ -133,5 +133,3 @@ hermes status 2>/dev/null || true
 `<hermes-home>/state.db` may be a symlink to `<hermes-home>/profiles/indigo/state.db`. A backup script that uses `stat -c%s` on the symlink sees the symlink length, not the 12GB+ target. Use `readlink -f` and `stat -L` before copying. If available space is less than target size plus margin, skip the local state backup instead of filling the disk.
 
 ## Known pitfall — partial backup newer than complete backup
-
-Retention must not blindly keep the newest backup directory. A failed retry can create a tiny newer directory that is not a valid restore point, while the previous larger directory is the newest complete backup. When enforcing the one-historical-backup rule, rank candidates by completeness first, recency second. At minimum, score whether expected key files are present (`state.db`, `chroma.sqlite3`, `chronicle.lbug`, `weave.lbug`, `styx.db`, `transactions.db`, `mempalace.tar.gz`) before deleting older candidates.

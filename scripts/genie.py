@@ -130,11 +130,18 @@ DEFAULTS = {
     "state_db_path": os.path.join(PROFILE_HOME, "state.db"),
     "sessions_path": os.path.join(PROFILE_HOME, "sessions"),
     "logs_path": os.path.join(PROFILE_HOME, "logs"),
-    "cron_output_path": os.path.join(PROFILE_HOME, "cron-output"),
+    "cron_output_path": os.path.join(PROFILE_HOME, "cron/output"),
     "snapshots_path": os.path.join(PROFILE_HOME, "state-snapshots"),
     "commons_path": os.path.join(PROFILE_HOME, "commons"),
     "backups_path": FS_ROOT + "/backups",
     "backup_paths": [FS_ROOT + "/backup", FS_ROOT + "/backups"],
+    # Out-of-band historical copies living outside the backup roots: migration
+    # backups, and in-place *.bak-* database copies under the profiles tree.
+    # Cfg-driven like backup_paths/snapshots_path — hardcoding them made the
+    # walk unscopable, so every caller (the regression suite included) read the
+    # live tree whatever cfg it passed. Defaults are the live locations.
+    "migrations_path": os.path.join(HERMES_HOME, "migrations"),
+    "profiles_path": os.path.join(HERMES_HOME, "profiles"),
     "historical_backup_keep_count": 1,
     "tmp_stale_hours": _skill_config("tmp_stale_hours", 24),
     "git_clone_max_age_days": _skill_config("git_clone_max_age_days", 5),
@@ -172,9 +179,9 @@ BUILTIN_TARGETS = {
         "path": "logs", "pattern": "logs/*.log",
         "description": "Log files",
     },
-    "cron-output": {
+    "cron/output": {
         "tier": 1, "action": "compress",
-        "max_age_days": 7, "path": "cron-output",
+        "max_age_days": 7, "path": "cron/output",
         "pattern": "cron-output/*",
         "description": "Cron job output files",
     },
@@ -301,8 +308,8 @@ def historical_backup_candidates(cfg):
         if not os.path.isdir(path):
             return 1
         key_files = {
-            "state.db", "chroma.sqlite3", "chronicle.db", "weave.sqlite",
-            "styx.db", "transactions.db", "mempalace.tar.gz",
+            "state.db", "the vector store", "chronicle.db", "weave.sqlite",
+            "styx.db", "transactions.db",
         }
         try:
             names = set(os.listdir(path))
@@ -311,7 +318,7 @@ def historical_backup_candidates(cfg):
         hits = len(key_files & names)
         return hits if hits else 1
 
-    def add(path, kind):
+    def add(path, kind, group=None):
         if not path or path in seen or not os.path.exists(path):
             return
         if os.path.islink(path):
@@ -328,6 +335,11 @@ def historical_backup_candidates(cfg):
         candidates.append({
             "path": path,
             "kind": kind,
+            # Retention bucket: the class PLUS the root that owns this copy.
+            # Kinds that span unrelated directories (db-bak, migration-backup)
+            # must carry their directory, or one global "keep 1" reclaims a
+            # skill's only backup because an unrelated skill's is newer.
+            "group": group or kind,
             "size": size,
             "mtime": mtime,
             "score": backup_score(path),
@@ -340,7 +352,7 @@ def historical_backup_candidates(cfg):
                 path = os.path.join(base, entry)
                 # Protect the live copy set: an entry in a backup root whose
                 # NAME carries no date or backup marker is what the pipeline
-                # refreshes in place (chronicle.db, current/, mempalace.tar.gz).
+                # refreshes in place (chronicle.db, current/).
                 # Deleting it removes a restore point rather than reclaiming a
                 # stale duplicate. This governs directories as well as files —
                 # scoping it to files made every undated live directory an
@@ -356,23 +368,24 @@ def historical_backup_candidates(cfg):
             if os.path.isdir(path):
                 add(path, "state-snapshot")
 
-    migrations = os.path.join(HERMES_HOME, "migrations")
-    if os.path.isdir(migrations):
+    migrations = cfg.get("migrations_path")
+    if migrations and os.path.isdir(migrations):
         for dp, dirs, files in os.walk(migrations):
             if os.path.basename(dp) == "backups":
                 for entry in dirs + files:
-                    add(os.path.join(dp, entry), "migration-backup")
+                    add(os.path.join(dp, entry), "migration-backup",
+                        group="migration-backup:%s" % dp)
                 dirs[:] = []
                 continue
             if dp.count(os.sep) - migrations.count(os.sep) > 4:
                 dirs[:] = []
 
-    profiles = os.path.join(HERMES_HOME, "profiles")
-    if os.path.isdir(profiles):
+    profiles = cfg.get("profiles_path")
+    if profiles and os.path.isdir(profiles):
         for dp, dirs, files in os.walk(profiles):
             for f in files:
                 if ".bak-" in f:
-                    add(os.path.join(dp, f), "db-bak")
+                    add(os.path.join(dp, f), "db-bak", group="db-bak:%s" % dp)
             if dp.count(os.sep) - profiles.count(os.sep) > 7:
                 dirs[:] = []
 
@@ -406,9 +419,13 @@ def backup_retention_plan(cfg):
     # Retention applies WITHIN each class and root, never across them: pooling
     # two backup roots, migration backups and profile .bak files into a single
     # global "keep 1" makes unrelated systems delete each other's only copy.
+    # item["group"] is that bucket — class plus owning directory. Grouping on
+    # "kind" alone honoured this for backup roots only (their kind embeds the
+    # root) while every *.bak-* under profiles/, and every migration backup,
+    # competed for a single slot across unrelated skills.
     groups = {}
     for item in valid:
-        groups.setdefault(item.get("kind", "?"), []).append(item)
+        groups.setdefault(item.get("group") or item.get("kind", "?"), []).append(item)
     keep, reclaim = [], list(invalid)
     for _kind, items in sorted(groups.items()):
         # Recency decides. backup_score only rescues a complete backup from
@@ -851,9 +868,9 @@ def discover_filesystem():
                         "description": "Session JSON files",
                         "requires_confirmation": True, "source": "discovered",
                     }
-                elif entry == "cron-output" or entry == "cron" and os.path.isdir(os.path.join(full, "output")):
+                elif entry == "cron/output" or entry == "cron" and os.path.isdir(os.path.join(full, "output")):
                     cron_out = os.path.join(full, "output") if entry == "cron" else full
-                    discovered["cron-output"] = {
+                    discovered["cron/output"] = {
                         "tier": 1, "action": "compress",
                         "max_age_days": 7, "path": cron_out,
                         "pattern": f"{cron_out}/*",

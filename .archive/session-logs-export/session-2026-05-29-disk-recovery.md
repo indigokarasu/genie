@@ -22,7 +22,7 @@ That was removed between task creation and execution. Arrived to find 81% (19G f
 ## Final: 62% (59G/96G, 37G free)
 
 ## Remaining large consumers (non-critical at 62%)
-- <fs-root>/indigo-repo: 5.1G (data/ has chroma.sqlite3 253M, backups duplicate data/)
+- <fs-root>/indigo-repo: 5.1G (data/ has the vector store 253M, backups duplicate data/)
 - <backups-root>/sessions.tar.gz: 2.6G (15K session JSONs already in state.db)
 - /var/lib/docker: 1.8G
 - /var/lib/containerd: 2.2G
