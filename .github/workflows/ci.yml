@@ -1,0 +1,38 @@
+# CI — static commands only: no untrusted event data is interpolated into any
+# `run:` step (the matrix value is chosen from a fixed list), so the standard
+# GitHub Actions injection vectors do not apply here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: git identity (the clone-gate fixtures create real repos)
+        run: |
+          git config --global user.email "ci@example.invalid"
+          git config --global user.name "CI"
+      - name: Byte-compile the scripts
+        run: python -m py_compile scripts/*.py
+      - name: Run the regression suites
+        run: python -m unittest discover -s tests -v
+      - name: CLI smoke tests (--help must exit 0)
+        run: |
+          python scripts/genie.py --help > /dev/null
+          python scripts/genie_rebuild_fts.py --help > /dev/null

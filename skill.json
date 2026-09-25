@@ -1,6 +1,6 @@
 {
   "name": "ocas-genie",
-  "version": "1.8.2",
+  "version": "1.9.1",
   "description": "Genie: VPS disk space monitor and safe cleanup. Identifies cleanup targets, estimates space reclamation, and executes safe deletions without reducing functionality.",
   "author": "Indigo Karasu",
   "email": "mx.indigo.karasu@gmail.com",
@@ -17,11 +17,9 @@
   },
   "self_update": {
     "source": "https://github.com/indigokarasu/genie",
-    "mechanism": "version-checked tarball from GitHub via gh CLI",
-    "command": "genie.update",
+    "mechanism": "centralized fleet sync (skills:update-fleet cron) — no in-skill updater",
     "requires_binaries": [
-      "gh",
-      "tar",
+      "git",
       "python3"
     ]
   }

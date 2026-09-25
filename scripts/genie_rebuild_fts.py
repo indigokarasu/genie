@@ -5,12 +5,49 @@ genie_rebuild_fts.py — Rebuild FTS indexes on a no-FTS state.db.
 Run inside a test container after restoring a compressed backup.
 
 Usage:
-    python3 genie_rebuild_fts.py [--db /path/to/state.db] [--verify]
+    python3 genie_rebuild_fts.py [--db /path/to/state.db] [--verify] [--dry-run]
+
+This script DROPs and recreates both FTS tables and their triggers. Preflight
+refuses any target that is not a messages-bearing SQLite state DB — the drop
+happens before the rebuild can tell what it opened, so a wrong --db path would
+otherwise destroy indexes on an unrelated database. --dry-run prints the
+destructive SQL and exits without touching anything.
 """
 
 import sqlite3, sys, os, time
 
 DB_PATH = os.path.expanduser("~/.hermes/state.db")
+
+# All statements that destroy existing FTS state, kept in one place so
+# --dry-run can show exactly what a real run would execute first.
+DESTRUCTIVE_SQL = """
+    DROP TRIGGER IF EXISTS messages_fts_insert;
+    DROP TRIGGER IF EXISTS messages_fts_delete;
+    DROP TRIGGER IF EXISTS messages_fts_update;
+    DROP TRIGGER IF EXISTS messages_fts_trigram_insert;
+    DROP TRIGGER IF EXISTS messages_fts_trigram_delete;
+    DROP TRIGGER IF EXISTS messages_fts_trigram_update;
+    DROP TABLE IF EXISTS messages_fts;
+    DROP TABLE IF EXISTS messages_fts_trigram;
+"""
+
+
+def _preflight(db_path):
+    """Refuse to touch a target that is not a messages-bearing state DB."""
+    if not os.path.isfile(db_path):
+        raise SystemExit(f"refusing: no such file: {db_path}")
+    with open(db_path, "rb") as fh:
+        if fh.read(16) != b"SQLite format 3\x00":
+            raise SystemExit(f"refusing: not a SQLite database: {db_path}")
+    conn = sqlite3.connect(db_path)
+    try:
+        found = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
+        ).fetchone()
+    finally:
+        conn.close()
+    if not found:
+        raise SystemExit(f"refusing: {db_path} has no 'messages' table — wrong database?")
 
 TRIGGER_SQL = """
 CREATE TRIGGER messages_fts_insert AFTER INSERT ON messages BEGIN
@@ -51,17 +88,8 @@ def rebuild_fts(db_path, verify=True):
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_size_limit=0")
 
-    # Drop old FTS if present
-    conn.executescript("""
-        DROP TRIGGER IF EXISTS messages_fts_insert;
-        DROP TRIGGER IF EXISTS messages_fts_delete;
-        DROP TRIGGER IF EXISTS messages_fts_update;
-        DROP TRIGGER IF EXISTS messages_fts_trigram_insert;
-        DROP TRIGGER IF EXISTS messages_fts_trigram_delete;
-        DROP TRIGGER IF EXISTS messages_fts_trigram_update;
-        DROP TABLE IF EXISTS messages_fts;
-        DROP TABLE IF EXISTS messages_fts_trigram;
-    """)
+    # Drop old FTS if present (the destructive half — see DESTRUCTIVE_SQL)
+    conn.executescript(DESTRUCTIVE_SQL)
 
     # Create FTS5 tables
     conn.executescript("""
@@ -104,13 +132,18 @@ def rebuild_fts(db_path, verify=True):
 
 if __name__ == "__main__":
     if "--help" in sys.argv or "-h" in sys.argv:
-        print(__doc__.strip() if __doc__ else "Usage: python3 genie_rebuild_fts.py [--db PATH] [--verify]")
+        print(__doc__.strip() if __doc__ else "Usage: python3 genie_rebuild_fts.py [--db PATH] [--verify] [--dry-run]")
         sys.exit(0)
     db_path = DB_PATH
     if "--db" in sys.argv:
         db_path = sys.argv[sys.argv.index("--db") + 1]
 
+    _preflight(db_path)  # never drop anything on an unvalidated target
     print(f"Rebuilding FTS on {db_path} ({os.path.getsize(db_path)/1e9:.2f} GB)")
+    if "--dry-run" in sys.argv:
+        print("  DRY RUN — nothing executed. Destructive SQL that would run first:")
+        print(DESTRUCTIVE_SQL.strip())
+        sys.exit(0)
     t = rebuild_fts(db_path)
     print(f"  Done in {t:.1f}s")
     print(f"  Final size: {os.path.getsize(db_path)/1e9:.2f} GB")

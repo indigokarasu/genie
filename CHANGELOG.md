@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.9.1] - 2026-09-24
+
+### Safety
+- **`scripts/genie_rebuild_fts.py` validates before it destroys.** Preflight
+  refuses any `--db` that is not a messages-bearing SQLite file (wrong path,
+  non-SQLite file, unrelated DB), and `--dry-run` prints the exact DROP
+  statements without executing them. The rebuild itself is unchanged.
+- `skill.json` no longer advertises the removed in-skill updater.
+
+### Tests
+- `tests/test_regression_suite.py` — a unittest entry point, so
+  `python -m unittest discover -s tests` actually runs the regression suites.
+  It previously reported "NO TESTS RAN" while both suites passed. Discovery now
+  executes the 19 clone-gate cases and the retention-scope suite.
+
+### CI
+- `.github/workflows/ci.yml` — byte-compiles the scripts, runs unittest
+  discovery on Python 3.11/3.12, and smoke-tests `--help`.
+
+### Docs
+- SKILL.md condensed (27.5 KB → 13.7 KB; approx tokens 6.9k → 3.4k): inline
+  detail moved to references, duplicated sections merged, and the support-file
+  map now carries per-file "when to read" triggers.
+- New `references/maintenance-lessons.md` — publishing a change when the remote
+  was force-updated; silent no-op retention lines.
+- Removed the dead `references/self-update-genie.md` pointer (the in-skill
+  updater was removed in `b3b942b`); `references/default-config-genie.md` now
+  documents every runtime key; `references/clone-deletion-safety.md` case count
+  corrected (7 → 19).
+
 ## [Unreleased] - 2026-09-22
 
 ### Fixed

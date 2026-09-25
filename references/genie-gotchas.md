@@ -40,7 +40,7 @@ Operational lessons learned from running Genie in production. Read this after yo
 
 - **Large file counts**: With 5,000+ files to gzip, use `terminal(background=True, notify_on_complete=True)`.
 - **Disk-at-100% blocks operations**: When disk is at 100%, Genie cannot write journal files, create temp files, or stage data. Check `df -h /` first — if at 100%, focus on immediate space recovery (Tier 1 cleanup, snapshot deletion) before attempting any backup workflow.
-- **Script/version desync during self-update**: Always compare script hashes even when versions match. See `references/self-update-genie.md`.
+- **Script/version desync after a fleet sync**: the in-skill updater is gone (updates come from the centralized `skills:update-fleet` cron). After a sync, always compare script hashes even when versions match — `cmp` the installed `scripts/genie.py` against the repo copy; a partially synced update leaves docs and behavior at different versions.
 - **`~` path resolution in cron context**: When running as a cron job, `HOME` is set to the profile-scoped path, not `<fs-root>/`. **Always use absolute paths** (`<hermes-home>/...`) in cron context.
 - **GitHub default branch is `main`**: The genie repo's default branch is `main`, not `master`. Using `master` in raw GitHub URLs returns 404 or stale content.
-- **Script path deduplication**: The three script paths in Step 0 may resolve to the same file (hardlink or symlink). `cp` between them will fail with "same file" — this is expected. Use `cmp` or `ls -i` (inode check) to verify before assuming they're independent copies.
+- **Script path deduplication**: The three script paths in the locate step may resolve to the same file (hardlink or symlink). `cp` between them will fail with "same file" — this is expected. Use `cmp` or `ls -i` (inode check) to verify before assuming they're independent copies.

@@ -37,8 +37,9 @@ errors returns a blocker, so an unreadable repo is never deleted.
 | unverifiable branch | branch has no configured upstream |
 | unreadable repo | any git probe fails |
 
-Covered by `tests/test_clone_delete_gate.py` (7 cases, including the
-fail-closed and protected-path paths).
+Covered by `tests/test_clone_delete_gate.py` (19 cases: fail-closed, protected
+paths, dirty/stashed/unpushed work, missing upstream, unreadable repo, tag-only
+commits, submodules, and linked worktrees).
 
 ## Proving a clone is disposable by hand
 
