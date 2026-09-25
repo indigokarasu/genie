@@ -71,6 +71,14 @@ ps aux | grep camoufox
 rm -rf /tmp/camoufox-*
 ```
 
+## Scratch Working Copies (cache/scratch/)
+
+Sessions running lock-heavy analysis (state.db mining, session parsing) sometimes `cp` live DBs into `<hermes-home>/cache/scratch/` as frozen working copies. A leftover state.db copy is ~1.5 GB and invisible to ref-greps — nothing references it.
+
+**Tell**: a `state.db` (or other DB) copy under `cache/scratch/` from a working session; scratch is TMPDIR ("temporary files and probes") and prunes entries idle >24h, but a fresh large copy still shows in disk-growth attribution.
+
+**Provenance check before reclaim**: the per-session command audit lives in the Tirith security log (`/root/.local/share/tirith/log.jsonl`) — grep the filename to find the creating `cp` + session id + timestamp. Confirm the creator session ended and no holders remain (`fuser <file>`; `/proc/*/fd` scan). Safe to remove once the creator run ends: it duplicates live data plus backups.
+
 ## Large Caches Not Tracked by Package Managers
 
 - `~/.cache/camoufox/` — browser profile cache for stealth browsing. 1.4 GB in this session. Safe to delete entirely; rebuilds on next browser use.
@@ -111,6 +119,7 @@ du -sh <hermes-home>/profiles/indigo/*/ 2>/dev/null | sort -rh
 | Fully-pushed mirror clones | 3.2 GB | many clones of repos that also exist elsewhere on the box | delete only via the work-preservation gate |
 | Duplicate model store | 1.7 GB | daemon `HOME` differs from where assets were pulled | merge stores, fix ownership |
 | Aged cron transcripts | 170 MB | thousands of dated dirs under `cron/output` | archive to one tarball |
+| Scratch DB working copy | 1.5 GB (2026-09-25) | `state.db` copy under `cache/scratch/`, zero refs elsewhere; creator visible via tirith log | remove after creator session ends (fuser/fd check) |
 
 **Ordering rule:** reclaim in the order *provably-redundant, then orphaned,
 then aged*. Never delete anything whose only copy is local, and check backup
